@@ -42,3 +42,35 @@ impl Cell {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cell_creation() {
+        // Test Markdown cell creation
+        let md_cell = Cell::new_markdown("# Hello World".to_string());
+        assert!(!md_cell.id.is_nil());
+        assert_eq!(md_cell.content, "# Hello World");
+        match md_cell.kind {
+            Markdown => (), // Expected
+            _ => panic!("Expected Markdown cell"),
+        }
+
+        // Test code cell creation
+        let code_cell = Cell::new_code("print('test')".to_string());
+        assert!(!code_cell.id.is_nil());
+        assert_eq!(code_cell.content, "print('test')");
+        match code_cell.kind {
+            CellKind::Code {
+                outputs,
+                execution_number,
+            } => {
+                assert!(outputs.is_empty());
+                assert!(execution_number.is_none());
+            }
+            _ => panic!("Expected Code cell"),
+        }
+    }
+}
