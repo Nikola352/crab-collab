@@ -1,6 +1,7 @@
 mod protocol;
 mod state;
 mod websocket;
+mod handler;
 
 use axum::Router;
 use axum::routing::get;

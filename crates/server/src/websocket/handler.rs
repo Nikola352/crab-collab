@@ -1,5 +1,6 @@
+use crate::handler;
 use crate::protocol::message::{ClientMessage, ServerMessage};
-use crate::protocol::types::UserId;
+use crate::protocol::types::{User, UserId};
 use crate::state::AppState;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{State, WebSocketUpgrade};
@@ -7,7 +8,6 @@ use axum::response::IntoResponse;
 use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use uuid::Uuid;
 
 pub async fn websocket_handler(
     ws: WebSocketUpgrade,
@@ -21,10 +21,11 @@ async fn websocket_connection(stream: WebSocket, state: AppState) {
 
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(100);
 
-    let user_id: UserId = Uuid::new_v4();
+    let user = User::new(tx);
+    let user_id = user.id;
 
     {
-        state.connections.write().await.insert(user_id, tx.clone());
+        state.users.write().await.insert(user.id, user);
     }
 
     let state = Arc::new(state);
@@ -66,10 +67,10 @@ async fn websocket_connection(stream: WebSocket, state: AppState) {
     }
 
     {
-        state.connections.write().await.remove(&user_id);
+        state.users.write().await.remove(&user_id);
     }
 
-    // TODO: notify other that user has left
+    handler::user::handle_leave(user_id, &state).await;
 }
 
 async fn handle_client_message(
@@ -78,9 +79,8 @@ async fn handle_client_message(
     state: &AppState,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match message {
-        ClientMessage::Ping => {
-            state.broadcast(ServerMessage::Ping).await;
-        }
-    }
+        ClientMessage::Ping => state.broadcast(ServerMessage::Ping, Some(user_id)).await,
+        ClientMessage::Join { name } => handler::user::handle_join(user_id, name, state).await,
+    };
     Ok(())
 }
