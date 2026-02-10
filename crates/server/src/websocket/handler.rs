@@ -81,7 +81,6 @@ async fn handle_client_message(
     state: &AppState,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match message {
-        ClientMessage::Ping => state.broadcast(ServerMessage::Ping, Some(user_id)).await?,
         ClientMessage::Join { name } => handler::user::handle_join(user_id, name, state).await?,
     };
     Ok(())
