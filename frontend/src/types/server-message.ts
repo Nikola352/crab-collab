@@ -35,5 +35,5 @@ export function isLeaveMessage(
 export function isFullStateMessage(
   message: ServerMessage,
 ): message is FullStateMessage {
-  return message.type === "join";
+  return message.type === "full_state";
 }
