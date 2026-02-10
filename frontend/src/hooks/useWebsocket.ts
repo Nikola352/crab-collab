@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import type { ClientMessage, ServerMessage } from "../types/protocol";
+import type { ClientMessage } from "../types/client-message";
+import type { ServerMessage } from "../types/server-message";
 
 export type MessageHandler = (msg: ServerMessage) => void;
 

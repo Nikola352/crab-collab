@@ -15,9 +15,22 @@ export const Notebook = () => {
       console.log(message);
     });
 
+    on("join", (msg) => {
+      console.log(msg);
+    });
+
+    on("leave", (msg) => {
+      console.log(msg);
+    });
+
+    send({
+      type: "join",
+      name: "user" + (Math.floor(Math.random() * 5) + 1),
+    });
+
     const intervalId = setInterval(() => {
       send({ type: "ping" });
-    }, 3000);
+    }, 5000);
 
     return () => clearInterval(intervalId);
   }, [isConnected, send, on]);
