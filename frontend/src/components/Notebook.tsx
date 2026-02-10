@@ -11,10 +11,6 @@ export const Notebook = () => {
   useEffect(() => {
     if (!isConnected) return;
 
-    on("ping", (message) => {
-      console.log(message);
-    });
-
     on("join", (msg) => {
       console.log(msg);
     });
@@ -23,16 +19,14 @@ export const Notebook = () => {
       console.log(msg);
     });
 
+    on("full_state", (msg) => {
+      console.log(msg);
+    });
+
     send({
       type: "join",
       name: "user" + (Math.floor(Math.random() * 5) + 1),
     });
-
-    const intervalId = setInterval(() => {
-      send({ type: "ping" });
-    }, 5000);
-
-    return () => clearInterval(intervalId);
   }, [isConnected, send, on]);
 
   return (
