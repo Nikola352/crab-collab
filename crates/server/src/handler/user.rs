@@ -26,7 +26,7 @@ pub async fn handle_join(
     if let Some(sender) = tx {
         sender
             .send(ServerMessage::FullState {
-                notebook: (*state.notebook).clone(),
+                notebook: (*state.notebook).read().await.clone(),
                 users: state.users.read().await.values().cloned().collect(),
                 user_id,
             })

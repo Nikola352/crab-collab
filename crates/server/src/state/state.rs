@@ -9,14 +9,14 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 pub struct AppState {
     pub users: Arc<RwLock<HashMap<UserId, User>>>,
-    pub notebook: Arc<Notebook>,
+    pub notebook: Arc<RwLock<Notebook>>,
 }
 
 impl AppState {
     pub fn new() -> Self {
         Self {
             users: Arc::new(RwLock::new(HashMap::new())),
-            notebook: Arc::new(Notebook::new()),
+            notebook: Arc::new(RwLock::new(Notebook::new())),
         }
     }
 
