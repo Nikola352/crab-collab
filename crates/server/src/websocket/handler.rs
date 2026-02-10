@@ -70,7 +70,9 @@ async fn websocket_connection(stream: WebSocket, state: AppState) {
         state.users.write().await.remove(&user_id);
     }
 
-    handler::user::handle_leave(user_id, &state).await;
+    if let Err(err) = handler::user::handle_leave(user_id, &state).await {
+        tracing::error!("Failed to broadcast user leave: {err}");
+    }
 }
 
 async fn handle_client_message(
@@ -79,8 +81,8 @@ async fn handle_client_message(
     state: &AppState,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match message {
-        ClientMessage::Ping => state.broadcast(ServerMessage::Ping, Some(user_id)).await,
-        ClientMessage::Join { name } => handler::user::handle_join(user_id, name, state).await,
+        ClientMessage::Ping => state.broadcast(ServerMessage::Ping, Some(user_id)).await?,
+        ClientMessage::Join { name } => handler::user::handle_join(user_id, name, state).await?,
     };
     Ok(())
 }
