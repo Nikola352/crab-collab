@@ -8,7 +8,7 @@ interface JoinScreenProps {
 export function JoinScreen({ onJoin, isConnecting }: JoinScreenProps) {
   const [name, setName] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SubmitEvent) => {
     e.preventDefault();
     const trimmedName = name.trim();
     if (trimmedName) {

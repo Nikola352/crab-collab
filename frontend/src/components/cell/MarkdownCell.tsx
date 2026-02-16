@@ -13,10 +13,6 @@ export function MarkdownCell({ cell }: MarkdownCellProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    setContent(cell.content);
-  }, [cell.content]);
-
-  useEffect(() => {
     if (isEditing && textareaRef.current) {
       textareaRef.current.focus();
       textareaRef.current.selectionStart = textareaRef.current.value.length;

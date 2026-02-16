@@ -1,5 +1,3 @@
-import "./App.css";
-
 import { useState } from "react";
 import { Toaster } from "sonner";
 import { JoinScreen } from "./components/JoinScreen";

@@ -10,6 +10,7 @@ import type {
   JoinMessage,
   LeaveMessage,
 } from "../../types/server-message";
+import { useUserStore } from "../../stores/userStore";
 
 const { VITE_WS_BASE_URL } = import.meta.env;
 
@@ -23,9 +24,9 @@ export function NotebookView({ userName }: NotebookViewProps) {
 
   const setSession = useSessionStore((state) => state.setSession);
   const setCells = useNotebookStore((state) => state.setCells);
-  const setUsers = useNotebookStore((state) => state.setUsers);
-  const addUser = useNotebookStore((state) => state.addUser);
-  const removeUser = useNotebookStore((state) => state.removeUser);
+  const setUsers = useUserStore((state) => state.setUsers);
+  const addUser = useUserStore((state) => state.addUser);
+  const removeUser = useUserStore((state) => state.removeUser);
 
   const handleFullState = useCallback(
     (msg: FullStateMessage) => {
@@ -51,7 +52,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
 
   const handleLeave = useCallback(
     (msg: LeaveMessage) => {
-      const users = useNotebookStore.getState().users;
+      const users = useUserStore.getState().users;
       const user = users.find((u) => u.id === msg.user_id);
       removeUser(msg.user_id);
       if (user?.name) {

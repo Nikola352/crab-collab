@@ -1,9 +1,9 @@
-import { useNotebookStore } from "../../stores/notebookStore";
 import { useSessionStore } from "../../stores/sessionStore";
+import { useUserStore } from "../../stores/userStore";
 import { UserAvatar } from "./UserAvatar";
 
 export function UserPresenceBar() {
-  const users = useNotebookStore((state) => state.users);
+  const users = useUserStore((state) => state.users);
   const currentUserId = useSessionStore((state) => state.userId);
 
   if (users.length === 0) {

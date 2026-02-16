@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Editor from "@monaco-editor/react";
 import type { CodeCell as CodeCellType } from "../../types/cell";
 import { OutputArea } from "./OutputArea";
@@ -9,10 +9,6 @@ interface CodeCellProps {
 
 export function CodeCell({ cell }: CodeCellProps) {
   const [content, setContent] = useState(cell.content);
-
-  useEffect(() => {
-    setContent(cell.content);
-  }, [cell.content]);
 
   const executionLabel =
     cell.execution_number !== null ? `[${cell.execution_number}]` : "[ ]";

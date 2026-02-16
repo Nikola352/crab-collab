@@ -1,10 +1,11 @@
 import { useNotebookStore } from "../../stores/notebookStore";
 import { useSessionStore } from "../../stores/sessionStore";
+import { useUserStore } from "../../stores/userStore";
 import { CellWrapper } from "../cell/CellWrapper";
 
 export function CellList() {
   const cells = useNotebookStore((state) => state.cells);
-  const users = useNotebookStore((state) => state.users);
+  const users = useUserStore((state) => state.users);
   const currentUserId = useSessionStore((state) => state.userId);
 
   if (cells.length === 0) {
