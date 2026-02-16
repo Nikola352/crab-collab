@@ -1,6 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+
+import { useNotebookStore } from "../../stores/notebookStore";
+
 import type { MarkdownCell as MarkdownCellType } from "../../types/cell";
 
 interface MarkdownCellProps {
@@ -9,8 +12,11 @@ interface MarkdownCellProps {
 
 export function MarkdownCell({ cell }: MarkdownCellProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [content, setContent] = useState(cell.content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const content = cell.content;
+  const setContent = useNotebookStore(
+    (state) => (content: string) => state.updateCellContent(cell.id, content),
+  );
 
   useEffect(() => {
     if (isEditing && textareaRef.current) {

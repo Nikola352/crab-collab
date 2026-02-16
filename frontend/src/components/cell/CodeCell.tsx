@@ -1,19 +1,21 @@
-import { useState } from "react";
 import Editor from "@monaco-editor/react";
 import type { CodeCell as CodeCellType } from "../../types/cell";
 import { OutputArea } from "./OutputArea";
+import { useNotebookStore } from "../../stores/notebookStore";
 
 interface CodeCellProps {
   cell: CodeCellType;
 }
 
 export function CodeCell({ cell }: CodeCellProps) {
-  const [content, setContent] = useState(cell.content);
+  const setContent = useNotebookStore(
+    (state) => (content: string) => state.updateCellContent(cell.id, content),
+  );
 
   const executionLabel =
     cell.execution_number !== null ? `[${cell.execution_number}]` : "[ ]";
 
-  const lineCount = content.split("\n").length;
+  const lineCount = cell.content.split("\n").length;
   const editorHeight = Math.max(lineCount * 20 + 16, 60);
 
   return (
@@ -26,7 +28,7 @@ export function CodeCell({ cell }: CodeCellProps) {
           <Editor
             height={editorHeight}
             language="python"
-            value={content}
+            value={cell.content}
             onChange={(value) => setContent(value ?? "")}
             theme="vs-dark"
             options={{

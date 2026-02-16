@@ -1,19 +1,22 @@
-import type { Cell } from "../../types/cell";
 import type { User } from "../../types/user";
 import { isCodeCell } from "../../types/cell";
 import { CodeCell } from "./CodeCell";
 import { MarkdownCell } from "./MarkdownCell";
 import { UserAvatar } from "../presence/UserAvatar";
 import { getUserColor } from "../../utils/userColors";
+import { useNotebookStore } from "../../stores/notebookStore";
 
 interface CellWrapperProps {
-  cell: Cell;
+  cellId: string;
   focusedByUsers: User[];
 }
 
-export function CellWrapper({ cell, focusedByUsers }: CellWrapperProps) {
+export function CellWrapper({ cellId, focusedByUsers }: CellWrapperProps) {
   const hasFocus = focusedByUsers.length > 0;
   const borderColor = hasFocus ? getUserColor(focusedByUsers[0].id) : undefined;
+  const cell = useNotebookStore((state) => state.getCell(cellId));
+
+  if (!cell) return;
 
   return (
     <div
