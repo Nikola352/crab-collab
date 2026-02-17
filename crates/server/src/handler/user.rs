@@ -79,10 +79,12 @@ pub async fn set_focus(
     }
 }
 
-#[allow(dead_code)]
-pub async fn clear_focus(user_id: UserId, state: &AppState) {
-    if let Some(user) = state.users.write().await.get_mut(&user_id) {
-        user.focused_cell = None;
-        user.cursor_position = None;
+pub async fn clear_focus_for_cell(cell_id: CellId, state: &AppState) {
+    let mut users = state.users.write().await;
+    for user in users.values_mut() {
+        if user.focused_cell == Some(cell_id) {
+            user.focused_cell = None;
+            user.cursor_position = None;
+        }
     }
 }

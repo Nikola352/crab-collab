@@ -39,6 +39,8 @@ pub async fn handle_insert_cell(
                 cell,
             } = result.data
             {
+                handler::user::set_focus(user_id, cell.id, Some(0), state).await;
+
                 state
                     .broadcast(
                         ServerMessage::CellInsert {
@@ -75,6 +77,8 @@ pub async fn handle_delete_cell(
     match result {
         Ok(result) => {
             if let OperationResultData::DeleteCell { cell_id, .. } = result.data {
+                handler::user::clear_focus_for_cell(cell_id, &state).await;
+
                 state
                     .broadcast(
                         ServerMessage::CellDelete {

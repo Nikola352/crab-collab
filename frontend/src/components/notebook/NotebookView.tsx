@@ -51,6 +51,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
   const addUser = useUserStore((state) => state.addUser);
   const removeUser = useUserStore((state) => state.removeUser);
   const updateUser = useUserStore((state) => state.updateUser);
+  const clearFocusForCell = useUserStore((state) => state.clearFocusForCell);
   const insertCell = useNotebookStore((state) => state.insertCell);
   const removeCell = useNotebookStore((state) => state.removeCell);
   const moveCellStore = useNotebookStore((state) => state.moveCell);
@@ -108,8 +109,12 @@ export function NotebookView({ userName }: NotebookViewProps) {
       const isOwn = msg.context.user_id === useSessionStore.getState().userId;
       receiveServerOperation(operation, isOwn);
       textSync.initCell(msg.cell.id, msg.cell.content);
+      updateUser(msg.context.user_id, {
+        focused_cell: msg.cell.id,
+        cursor_position: 0,
+      });
     },
-    [receiveServerOperation, textSync],
+    [receiveServerOperation, textSync, updateUser],
   );
 
   const handleCellDelete = useCallback(
@@ -123,8 +128,9 @@ export function NotebookView({ userName }: NotebookViewProps) {
       const isOwn = msg.context.user_id === useSessionStore.getState().userId;
       receiveServerOperation(operation, isOwn);
       textSync.removeCell(msg.cell_id);
+      clearFocusForCell(msg.cell_id);
     },
-    [receiveServerOperation, textSync],
+    [receiveServerOperation, textSync, clearFocusForCell],
   );
 
   const handleCellMove = useCallback(
@@ -291,8 +297,13 @@ export function NotebookView({ userName }: NotebookViewProps) {
         cell_id: uuidv4() as CellId,
         cell_type: cellType,
       });
+
+      const ownUserId = useSessionStore.getState().userId;
+      if (ownUserId) {
+        updateUser(ownUserId, { focused_cell: cellId, cursor_position: 0 });
+      }
     },
-    [insertCell, send, textSync],
+    [insertCell, send, textSync, updateUser],
   );
 
   const handleDeleteCell = useCallback(
@@ -310,8 +321,10 @@ export function NotebookView({ userName }: NotebookViewProps) {
         },
         cell_id: cellId,
       });
+
+      clearFocusForCell(cellId);
     },
-    [removeCell, send],
+    [removeCell, send, clearFocusForCell],
   );
 
   const handleMoveCell = useCallback(
