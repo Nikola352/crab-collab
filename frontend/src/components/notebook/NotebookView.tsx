@@ -1,17 +1,23 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { v4 as uuidv4 } from "uuid";
+
 import { useWebSocket } from "../../hooks/useWebsocket";
 import { useNotebookStore } from "../../stores/notebookStore";
 import { useSessionStore } from "../../stores/sessionStore";
-import { NotebookHeader } from "./NotebookHeader";
+import { useUserStore } from "../../stores/userStore";
 import { CellList } from "./CellList";
+import { NotebookHeader } from "./NotebookHeader";
+
 import type {
   FullStateMessage,
   JoinMessage,
   LeaveMessage,
+  CellInsertMessage,
+  OperationFailedMessage,
 } from "../../types/server-message";
-import { useUserStore } from "../../stores/userStore";
-
+import type { InsertOp, NoOp } from "../../types/operation";
+import type { Cell, CellId, CellType } from "../../types/cell";
 const { VITE_WS_BASE_URL } = import.meta.env;
 
 interface NotebookViewProps {
@@ -24,17 +30,23 @@ export function NotebookView({ userName }: NotebookViewProps) {
 
   const setSession = useSessionStore((state) => state.setSession);
   const setCells = useNotebookStore((state) => state.setCells);
+  const setVersion = useNotebookStore((state) => state.setVersion);
   const setUsers = useUserStore((state) => state.setUsers);
   const addUser = useUserStore((state) => state.addUser);
   const removeUser = useUserStore((state) => state.removeUser);
+  const insertCell = useNotebookStore((state) => state.insertCell);
+  const receiveServerOperation = useNotebookStore(
+    (state) => state.receiveServerOperation,
+  );
 
   const handleFullState = useCallback(
     (msg: FullStateMessage) => {
       setSession(msg.user_id, userName);
       setCells(msg.notebook.cells);
+      setVersion(msg.version);
       setUsers(msg.users);
     },
-    [setSession, setCells, setUsers, userName],
+    [setSession, setCells, setUsers, setVersion, userName],
   );
 
   const handleJoin = useCallback(
@@ -62,11 +74,52 @@ export function NotebookView({ userName }: NotebookViewProps) {
     [removeUser],
   );
 
+  const handleCellInsert = useCallback(
+    (msg: CellInsertMessage) => {
+      const operation: InsertOp = {
+        id: msg.context.request_id,
+        version: msg.context.version,
+        type: "insert",
+        cell: msg.cell,
+        index: msg.position,
+      };
+      const isOwn = msg.context.user_id === useSessionStore.getState().userId;
+      receiveServerOperation(operation, isOwn);
+    },
+    [receiveServerOperation],
+  );
+
+  const handleOperationFailed = useCallback(
+    (msg: OperationFailedMessage) => {
+      console.log("Operation failed: ", msg);
+      receiveServerOperation(
+        {
+          id: msg.context.request_id,
+          version: msg.context.version,
+          type: "noop",
+        } as NoOp,
+        true,
+      );
+    },
+    [receiveServerOperation],
+  );
+
   useEffect(() => {
     on("full_state", (msg) => handleFullState(msg as FullStateMessage));
     on("join", (msg) => handleJoin(msg as JoinMessage));
     on("leave", (msg) => handleLeave(msg as LeaveMessage));
-  }, [on, handleFullState, handleJoin, handleLeave]);
+    on("cell_insert", (msg) => handleCellInsert(msg as CellInsertMessage));
+    on("operation_failed", (msg) =>
+      handleOperationFailed(msg as OperationFailedMessage),
+    );
+  }, [
+    on,
+    handleFullState,
+    handleJoin,
+    handleLeave,
+    handleCellInsert,
+    handleOperationFailed,
+  ]);
 
   useEffect(() => {
     if (isConnected && !hasJoined.current) {
@@ -75,11 +128,45 @@ export function NotebookView({ userName }: NotebookViewProps) {
     }
   }, [isConnected, send, userName]);
 
+  const handleInsertCell = useCallback(
+    (index: number, cellType: CellType) => {
+      const cellId = uuidv4() as CellId;
+      const cell: Cell =
+        cellType === "code"
+          ? {
+              id: cellId,
+              cell_type: "code",
+              content: "",
+              outputs: [],
+              execution_number: null,
+            }
+          : {
+              id: cellId,
+              cell_type: "markdown",
+              content: "",
+            };
+
+      const requestId = insertCell(cell, index);
+
+      send({
+        type: "cell_insert",
+        context: {
+          base_version: useNotebookStore.getState().version,
+          request_id: requestId,
+        },
+        position: index,
+        cell_id: uuidv4() as CellId,
+        cell_type: cellType,
+      });
+    },
+    [insertCell, send],
+  );
+
   return (
     <div className="min-h-screen bg-gray-900">
       <NotebookHeader />
       <main className="max-w-4xl mx-auto px-6 py-6">
-        <CellList />
+        <CellList onInsertCell={handleInsertCell} />
       </main>
     </div>
   );

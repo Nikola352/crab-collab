@@ -1,7 +1,9 @@
+export type CellId = string & { readonly __brand: "cell-id" };
+
 export type CellType = "markdown" | "code";
 
 export interface BaseCell {
-  id: string;
+  id: CellId;
   content: string;
   cell_type: CellType;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -14,8 +14,12 @@ export function MarkdownCell({ cell }: MarkdownCellProps) {
   const [isEditing, setIsEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const content = cell.content;
-  const setContent = useNotebookStore(
-    (state) => (content: string) => state.updateCellContent(cell.id, content),
+  const updateCellContent = useNotebookStore(
+    (state) => state.updateCellContent,
+  );
+  const setContent = useCallback(
+    (content: string) => updateCellContent(cell.id, content),
+    [updateCellContent, cell.id],
   );
 
   useEffect(() => {

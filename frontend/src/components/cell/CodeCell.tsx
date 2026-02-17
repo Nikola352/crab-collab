@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import Editor from "@monaco-editor/react";
 import type { CodeCell as CodeCellType } from "../../types/cell";
 import { OutputArea } from "./OutputArea";
@@ -8,8 +9,12 @@ interface CodeCellProps {
 }
 
 export function CodeCell({ cell }: CodeCellProps) {
-  const setContent = useNotebookStore(
-    (state) => (content: string) => state.updateCellContent(cell.id, content),
+  const updateCellContent = useNotebookStore(
+    (state) => state.updateCellContent,
+  );
+  const setContent = useCallback(
+    (content: string) => updateCellContent(cell.id, content),
+    [updateCellContent, cell.id],
   );
 
   const executionLabel =

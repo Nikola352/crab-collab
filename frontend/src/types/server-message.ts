@@ -1,25 +1,54 @@
+import type { Cell } from "./cell";
 import type { Notebook } from "./notebook";
-import type { User } from "./user";
+import type { RequestId } from "./operation";
+import type { User, UserId } from "./user";
 
+// User messages
 export interface JoinMessage {
   type: "join";
-  user_id: string;
+  user_id: UserId;
   name: string;
 }
 
 export interface LeaveMessage {
   type: "leave";
-  user_id: string;
+  user_id: UserId;
 }
 
 export interface FullStateMessage {
   type: "full_state";
-  user_id: string;
+  user_id: UserId;
   notebook: Notebook;
+  version: number;
   users: User[];
 }
 
-export type ServerMessage = JoinMessage | LeaveMessage | FullStateMessage;
+// Notebook messages
+export interface StateUpdateContext {
+  version: number;
+  user_id: UserId;
+  request_id: RequestId;
+}
+
+export interface CellInsertMessage {
+  type: "cell_insert";
+  context: StateUpdateContext;
+  position: number;
+  cell: Cell;
+}
+
+export interface OperationFailedMessage {
+  type: "operation_failed";
+  context: StateUpdateContext;
+  message: string;
+}
+
+export type ServerMessage =
+  | JoinMessage
+  | LeaveMessage
+  | FullStateMessage
+  | CellInsertMessage
+  | OperationFailedMessage;
 
 // Type guards
 export function isJoinMessage(message: ServerMessage): message is JoinMessage {
@@ -36,4 +65,10 @@ export function isFullStateMessage(
   message: ServerMessage,
 ): message is FullStateMessage {
   return message.type === "full_state";
+}
+
+export function isCellInsertMessage(
+  message: ServerMessage,
+): message is CellInsertMessage {
+  return message.type === "cell_insert";
 }

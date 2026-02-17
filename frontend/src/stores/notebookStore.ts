@@ -1,18 +1,43 @@
+import { v4 as uuidv4 } from "uuid";
 import { create } from "zustand";
-import type { Cell } from "../types/cell";
 import { immer } from "zustand/middleware/immer";
+
+import {
+  type InsertOp,
+  isInsertOp,
+  isUpdateContentOp,
+  type Operation,
+  type RequestId,
+  type UpdateContentOp,
+} from "../types/operation";
+
+import type { Cell } from "../types/cell";
 
 interface NotebookState {
   version: number;
   cells: Record<string, Cell>;
   cellOrder: string[];
+
+  // last state that was fully confirmed by the server or null if all updates are confirmed
+  confirmedState: {
+    cells: Record<string, Cell>;
+    cellOrder: string[];
+  };
+
+  // optimistic updates applied to the UI, but not confirmed by the server
+  uncomfirmedOperations: string[];
+
+  // operations received from the server, but not yet applied to UI
+  pendingOperations: Operation[];
+
   setVersion: (version: number) => void;
   getCell: (id: string) => Cell | undefined;
   getAllCells: () => Cell[];
   setCells: (cells: Cell[]) => void;
-  addCell: (cell: Cell, index: number) => void;
-  removeCell: (cell: Cell) => void;
-  updateCellContent: (cellId: string, content: string) => void;
+  insertCell: (cell: Cell, index: number) => RequestId;
+  removeCell: (cell: Cell) => RequestId;
+  updateCellContent: (cellId: string, content: string) => RequestId;
+  receiveServerOperation: (operation: Operation, isOwn: boolean) => void;
 }
 
 export const useNotebookStore = create<NotebookState>()(
@@ -20,6 +45,13 @@ export const useNotebookStore = create<NotebookState>()(
     version: 0,
     cells: {},
     cellOrder: [],
+
+    confirmedState: {
+      cells: {},
+      cellOrder: [],
+    },
+    uncomfirmedOperations: [],
+    pendingOperations: [],
 
     setVersion: (version) => set({ version }),
 
@@ -33,15 +65,110 @@ export const useNotebookStore = create<NotebookState>()(
         cellOrder: cells.map((c) => c.id),
       }),
 
-    updateCellContent: (cellId, content) =>
+    updateCellContent: (cell_id, content) => {
+      const id = uuidv4() as RequestId;
       set((state) => {
-        if (state.cells[cellId]) {
-          state.cells[cellId].content = content;
+        const op = {
+          id,
+          version: state.version,
+          cell_id,
+          content,
+        } as UpdateContentOp;
+        applyLocalOperation(state, op);
+      });
+      return id;
+    },
+
+    insertCell: (cell: Cell, index: number) => {
+      const id = uuidv4() as RequestId;
+      set((state) => {
+        const op = {
+          id,
+          version: state.version,
+          cell,
+          index,
+        } as InsertOp;
+        applyLocalOperation(state, op);
+      });
+      return id;
+    },
+
+    receiveServerOperation: (operation, isOwn) =>
+      set((state) => {
+        if (state.uncomfirmedOperations.length == 0) {
+          handleOperation(state, operation);
+          state.version = operation.version;
+          return;
+        }
+
+        state.pendingOperations.push(operation);
+
+        if (
+          isOwn &&
+          operation.id ===
+            state.uncomfirmedOperations[state.uncomfirmedOperations.length - 1]
+        ) {
+          // last unconfirmed operation has arrived
+          syncWithServer(state);
         }
       }),
 
-    // TODO: implement
-    addCell: () => {},
-    removeCell: () => {},
+    // TODO:
+    removeCell: () => uuidv4() as RequestId,
   })),
 );
+
+function applyLocalOperation(state: NotebookState, operation: Operation) {
+  if (state.uncomfirmedOperations.length == 0) {
+    state.confirmedState.cells = state.cells;
+    state.confirmedState.cellOrder = state.cellOrder;
+  }
+  handleOperation(state, operation);
+  state.uncomfirmedOperations.push(operation.id);
+}
+
+function syncWithServer(state: NotebookState) {
+  if (state.pendingOperations.length === 0) {
+    state.confirmedState.cells = state.cells;
+    state.confirmedState.cellOrder = state.cellOrder;
+    return;
+  }
+
+  // roll back
+  state.cells = state.confirmedState.cells;
+  state.cellOrder = state.confirmedState.cellOrder;
+
+  // apply all ops
+  for (const op of state.pendingOperations) {
+    handleOperation(state, op);
+  }
+
+  state.version =
+    state.pendingOperations[state.pendingOperations.length - 1].version;
+  state.pendingOperations = [];
+  state.uncomfirmedOperations = [];
+}
+
+function handleOperation(state: NotebookState, operation: Operation) {
+  if (isInsertOp(operation)) insertCell(state, operation);
+  else if (isUpdateContentOp(operation)) updateCellContent(state, operation);
+}
+
+function insertCell(state: NotebookState, { cell, index }: InsertOp) {
+  state.cells[cell.id] = cell;
+
+  if (index !== undefined && index >= 0 && index <= state.cellOrder.length) {
+    state.cellOrder.splice(index, 0, cell.id);
+  } else {
+    state.cellOrder.push(cell.id);
+  }
+}
+
+function updateCellContent(
+  state: NotebookState,
+  { cell_id, content }: UpdateContentOp,
+) {
+  if (state.cells[cell_id]) {
+    state.cells[cell_id].content = content;
+  }
+}

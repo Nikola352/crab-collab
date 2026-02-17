@@ -1,11 +1,11 @@
 import { create } from "zustand";
-import type { User } from "../types/user";
+import type { User, UserId } from "../types/user";
 
 interface UserState {
   users: User[];
   setUsers: (users: User[]) => void;
   addUser: (user: User) => void;
-  removeUser: (userId: string) => void;
+  removeUser: (userId: UserId) => void;
 }
 
 export const useUserStore = create<UserState>((set) => ({

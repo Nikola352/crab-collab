@@ -1,3 +1,5 @@
+import type { UserId } from "../types/user";
+
 const COLORS = [
   "#ef4444", // red
   "#f97316", // orange
@@ -9,7 +11,7 @@ const COLORS = [
   "#ec4899", // pink
 ];
 
-export function getUserColor(userId: string): string {
+export function getUserColor(userId: UserId): string {
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
     hash = (hash << 5) - hash + userId.charCodeAt(i);

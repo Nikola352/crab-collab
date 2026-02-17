@@ -1,10 +1,11 @@
 import { create } from "zustand";
+import type { UserId } from "../types/user";
 
 interface SessionState {
-  userId: string | null;
+  userId: UserId | null;
   userName: string | null;
   isJoined: boolean;
-  setSession: (userId: string, userName: string) => void;
+  setSession: (userId: UserId, userName: string) => void;
   reset: () => void;
 }
 
