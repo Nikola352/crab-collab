@@ -1,6 +1,6 @@
 use crate::protocol::message::ServerMessage;
 use crate::protocol::types::{User, UserId};
-use notebook::notebook::Notebook;
+use notebook::conflict_resolver::state::NotebookStateHolder;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
@@ -9,14 +9,14 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 pub struct AppState {
     pub users: Arc<RwLock<HashMap<UserId, User>>>,
-    pub notebook: Arc<RwLock<Notebook>>,
+    pub notebook: Arc<dyn NotebookStateHolder>,
 }
 
 impl AppState {
-    pub fn new() -> Self {
+    pub fn new(state_holder: impl NotebookStateHolder + 'static) -> Self {
         Self {
             users: Arc::new(RwLock::new(HashMap::new())),
-            notebook: Arc::new(RwLock::new(Notebook::new())),
+            notebook: Arc::new(state_holder),
         }
     }
 
