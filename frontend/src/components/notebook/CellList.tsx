@@ -3,10 +3,11 @@ import { useNotebookStore } from "../../stores/notebookStore";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useUserStore } from "../../stores/userStore";
 import { CellWrapper } from "../cell/CellWrapper";
-import type { CellType } from "../../types/cell";
+import type { CellId, CellType } from "../../types/cell";
 
 interface CellListProps {
   onInsertCell: (index: number, cellType: CellType) => void;
+  onDeleteCell: (cellId: CellId) => void;
 }
 
 function InsertButton({
@@ -62,7 +63,7 @@ function InsertButton({
   );
 }
 
-export function CellList({ onInsertCell }: CellListProps) {
+export function CellList({ onInsertCell, onDeleteCell }: CellListProps) {
   const cellIds = useNotebookStore((state) => state.cellOrder);
   const users = useUserStore((state) => state.users);
   const currentUserId = useSessionStore((state) => state.userId);
@@ -86,7 +87,7 @@ export function CellList({ onInsertCell }: CellListProps) {
 
         return (
           <div key={id}>
-            <CellWrapper cellId={id} focusedByUsers={focusedByUsers} />
+            <CellWrapper cellId={id} focusedByUsers={focusedByUsers} onDelete={() => onDeleteCell(id as CellId)} />
             <InsertButton index={i + 1} onInsertCell={onInsertCell} />
           </div>
         );

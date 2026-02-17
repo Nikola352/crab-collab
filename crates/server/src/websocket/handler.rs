@@ -91,6 +91,9 @@ async fn handle_client_message(
         } => {
             handler::notebook::handle_insert_cell(user_id, context, position, cell_id, cell_type, content, state)
                 .await?
+        },
+        ClientMessage::CellDelete { context, cell_id } => {
+            handler::notebook::handle_delete_cell(user_id, context, cell_id, state).await?
         }
     };
     Ok(())

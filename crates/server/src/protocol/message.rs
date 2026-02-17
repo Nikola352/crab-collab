@@ -22,6 +22,10 @@ pub enum ClientMessage {
         cell_type: CellType,
         content: Option<String>,
     },
+    CellDelete {
+        context: OperationContext,
+        cell_id: CellId,
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -44,6 +48,10 @@ pub enum ServerMessage {
         context: StateUpdateContext,
         position: usize,
         cell: Cell,
+    },
+    CellDelete {
+        context: StateUpdateContext,
+        cell_id: CellId,
     },
 
     OperationFailed {

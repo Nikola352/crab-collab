@@ -1,4 +1,4 @@
-import type { Cell } from "./cell";
+import type { Cell, CellId } from "./cell";
 import type { Notebook } from "./notebook";
 import type { RequestId } from "./operation";
 import type { User, UserId } from "./user";
@@ -37,6 +37,12 @@ export interface CellInsertMessage {
   cell: Cell;
 }
 
+export interface CellDeleteMessage {
+  type: "cell_delete";
+  context: StateUpdateContext;
+  cell_id: CellId;
+}
+
 export interface OperationFailedMessage {
   type: "operation_failed";
   context: StateUpdateContext;
@@ -48,6 +54,7 @@ export type ServerMessage =
   | LeaveMessage
   | FullStateMessage
   | CellInsertMessage
+  | CellDeleteMessage
   | OperationFailedMessage;
 
 // Type guards
@@ -71,4 +78,10 @@ export function isCellInsertMessage(
   message: ServerMessage,
 ): message is CellInsertMessage {
   return message.type === "cell_insert";
+}
+
+export function isCellDeleteMessage(
+  message: ServerMessage,
+): message is CellDeleteMessage {
+  return message.type === "cell_delete";
 }

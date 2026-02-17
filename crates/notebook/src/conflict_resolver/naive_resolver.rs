@@ -1,9 +1,10 @@
 use crate::conflict_resolver::state::NotebookStateHolder;
 use crate::error::NotebookError;
 use crate::error::NotebookError::InvalidIndex;
-use crate::notebook::{Cell, Notebook};
+use crate::notebook::{Cell, CellId, Notebook};
 use crate::operation::Operation;
 use crate::operation::result::{OperationResult, OperationResultData};
+use std::collections::HashMap;
 use tokio::sync::RwLock;
 
 pub struct NaiveStateHolder {
@@ -14,6 +15,7 @@ struct State {
     version: u64,
     notebook: Notebook,
     operation_history: Vec<Operation>,
+    delete_indexes: HashMap<CellId, usize>, // index of cell when it was deleted
 }
 
 #[async_trait::async_trait]
@@ -34,6 +36,13 @@ impl NotebookStateHolder for NaiveStateHolder {
                         position: real_index,
                         cell: cell.clone(),
                     },
+                })
+            }
+            Operation::DeleteCell { cell_id } => {
+                state.apply_delete(cell_id)?;
+                Ok(OperationResult {
+                    version: state.version + 1,
+                    data: OperationResultData::DeleteCell { cell_id },
                 })
             }
         };
@@ -58,6 +67,7 @@ impl NaiveStateHolder {
                 version: 0,
                 notebook: Notebook::new(),
                 operation_history: Vec::new(),
+                delete_indexes: HashMap::new(),
             }),
         }
     }
@@ -75,6 +85,14 @@ impl State {
                         index += 1;
                     }
                 }
+                Operation::DeleteCell { cell_id } => {
+                    let idx = self.delete_indexes.get(cell_id);
+                    if let Some(idx) = idx
+                        && *idx < index
+                    {
+                        index -= 1;
+                    }
+                }
             }
         }
         index
@@ -85,6 +103,15 @@ impl State {
             return Err(InvalidIndex(index));
         }
         self.notebook.insert_cell(cell, index)?;
+        Ok(())
+    }
+
+    fn apply_delete(&mut self, cell_id: CellId) -> Result<(), NotebookError> {
+        let idx = self.notebook.cells().iter().position(|c| c.id == cell_id);
+        if let Some(idx) = idx {
+            self.delete_indexes.insert(cell_id, idx);
+        }
+        self.notebook.delete_cell(cell_id)?;
         Ok(())
     }
 }

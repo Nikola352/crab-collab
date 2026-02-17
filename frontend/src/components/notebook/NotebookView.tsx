@@ -14,9 +14,10 @@ import type {
   JoinMessage,
   LeaveMessage,
   CellInsertMessage,
+  CellDeleteMessage,
   OperationFailedMessage,
 } from "../../types/server-message";
-import type { InsertOp, NoOp } from "../../types/operation";
+import type { DeleteOp, InsertOp, NoOp } from "../../types/operation";
 import type { Cell, CellId, CellType } from "../../types/cell";
 const { VITE_WS_BASE_URL } = import.meta.env;
 
@@ -35,6 +36,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
   const addUser = useUserStore((state) => state.addUser);
   const removeUser = useUserStore((state) => state.removeUser);
   const insertCell = useNotebookStore((state) => state.insertCell);
+  const removeCell = useNotebookStore((state) => state.removeCell);
   const receiveServerOperation = useNotebookStore(
     (state) => state.receiveServerOperation,
   );
@@ -89,6 +91,20 @@ export function NotebookView({ userName }: NotebookViewProps) {
     [receiveServerOperation],
   );
 
+  const handleCellDelete = useCallback(
+    (msg: CellDeleteMessage) => {
+      const operation: DeleteOp = {
+        id: msg.context.request_id,
+        version: msg.context.version,
+        type: "delete",
+        cell_id: msg.cell_id,
+      };
+      const isOwn = msg.context.user_id === useSessionStore.getState().userId;
+      receiveServerOperation(operation, isOwn);
+    },
+    [receiveServerOperation],
+  );
+
   const handleOperationFailed = useCallback(
     (msg: OperationFailedMessage) => {
       console.log("Operation failed: ", msg);
@@ -109,6 +125,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
     on("join", (msg) => handleJoin(msg as JoinMessage));
     on("leave", (msg) => handleLeave(msg as LeaveMessage));
     on("cell_insert", (msg) => handleCellInsert(msg as CellInsertMessage));
+    on("cell_delete", (msg) => handleCellDelete(msg as CellDeleteMessage));
     on("operation_failed", (msg) =>
       handleOperationFailed(msg as OperationFailedMessage),
     );
@@ -118,6 +135,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
     handleJoin,
     handleLeave,
     handleCellInsert,
+    handleCellDelete,
     handleOperationFailed,
   ]);
 
@@ -162,11 +180,30 @@ export function NotebookView({ userName }: NotebookViewProps) {
     [insertCell, send],
   );
 
+  const handleDeleteCell = useCallback(
+    (cellId: CellId) => {
+      const cell = useNotebookStore.getState().getCell(cellId);
+      if (!cell) return;
+
+      const requestId = removeCell(cell);
+
+      send({
+        type: "cell_delete",
+        context: {
+          base_version: useNotebookStore.getState().version,
+          request_id: requestId,
+        },
+        cell_id: cellId,
+      });
+    },
+    [removeCell, send],
+  );
+
   return (
     <div className="min-h-screen bg-gray-900">
       <NotebookHeader />
       <main className="max-w-4xl mx-auto px-6 py-6">
-        <CellList onInsertCell={handleInsertCell} />
+        <CellList onInsertCell={handleInsertCell} onDeleteCell={handleDeleteCell} />
       </main>
     </div>
   );

@@ -22,7 +22,13 @@ export interface CellInsertMessage {
   content?: string;
 }
 
-export type ClientMessage = JoinMessage | CellInsertMessage;
+export interface CellDeleteMessage {
+  type: "cell_delete";
+  context: OperationContext;
+  cell_id: CellId;
+}
+
+export type ClientMessage = JoinMessage | CellInsertMessage | CellDeleteMessage;
 
 export function isJoinMessage(message: ClientMessage): message is JoinMessage {
   return message.type === "join";
@@ -32,4 +38,11 @@ export function isCellInsertMessage(
   message: ClientMessage,
 ): message is CellInsertMessage {
   return message.type === "cell_insert";
+}
+
+
+export function isCellDeleteMessage(
+  message: ClientMessage,
+): message is CellDeleteMessage {
+  return message.type === "cell_delete";
 }

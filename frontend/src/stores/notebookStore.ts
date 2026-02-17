@@ -3,7 +3,9 @@ import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
 import {
+  type DeleteOp,
   type InsertOp,
+  isDeleteOp,
   isInsertOp,
   isUpdateContentOp,
   type Operation,
@@ -25,7 +27,7 @@ interface NotebookState {
   };
 
   // optimistic updates applied to the UI, but not confirmed by the server
-  uncomfirmedOperations: string[];
+  unconfirmedOperations: string[];
 
   // operations received from the server, but not yet applied to UI
   pendingOperations: Operation[];
@@ -50,7 +52,7 @@ export const useNotebookStore = create<NotebookState>()(
       cells: {},
       cellOrder: [],
     },
-    uncomfirmedOperations: [],
+    unconfirmedOperations: [],
     pendingOperations: [],
 
     setVersion: (version) => set({ version }),
@@ -93,9 +95,22 @@ export const useNotebookStore = create<NotebookState>()(
       return id;
     },
 
+    removeCell: (cell: Cell) => {
+      const id = uuidv4() as RequestId;
+      set((state) => {
+        const op = {
+          id,
+          version: state.version,
+          cell_id: cell.id,
+        } as DeleteOp;
+        applyLocalOperation(state, op);
+      });
+      return id;
+    },
+
     receiveServerOperation: (operation, isOwn) =>
       set((state) => {
-        if (state.uncomfirmedOperations.length == 0) {
+        if (state.unconfirmedOperations.length == 0) {
           handleOperation(state, operation);
           state.version = operation.version;
           return;
@@ -106,25 +121,22 @@ export const useNotebookStore = create<NotebookState>()(
         if (
           isOwn &&
           operation.id ===
-            state.uncomfirmedOperations[state.uncomfirmedOperations.length - 1]
+            state.unconfirmedOperations[state.unconfirmedOperations.length - 1]
         ) {
           // last unconfirmed operation has arrived
           syncWithServer(state);
         }
       }),
-
-    // TODO:
-    removeCell: () => uuidv4() as RequestId,
   })),
 );
 
 function applyLocalOperation(state: NotebookState, operation: Operation) {
-  if (state.uncomfirmedOperations.length == 0) {
+  if (state.unconfirmedOperations.length == 0) {
     state.confirmedState.cells = state.cells;
     state.confirmedState.cellOrder = state.cellOrder;
   }
   handleOperation(state, operation);
-  state.uncomfirmedOperations.push(operation.id);
+  state.unconfirmedOperations.push(operation.id);
 }
 
 function syncWithServer(state: NotebookState) {
@@ -146,11 +158,12 @@ function syncWithServer(state: NotebookState) {
   state.version =
     state.pendingOperations[state.pendingOperations.length - 1].version;
   state.pendingOperations = [];
-  state.uncomfirmedOperations = [];
+  state.unconfirmedOperations = [];
 }
 
 function handleOperation(state: NotebookState, operation: Operation) {
   if (isInsertOp(operation)) insertCell(state, operation);
+  else if (isDeleteOp(operation)) deleteCell(state, operation);
   else if (isUpdateContentOp(operation)) updateCellContent(state, operation);
 }
 
@@ -162,6 +175,11 @@ function insertCell(state: NotebookState, { cell, index }: InsertOp) {
   } else {
     state.cellOrder.push(cell.id);
   }
+}
+
+function deleteCell(state: NotebookState, { cell_id }: DeleteOp) {
+  delete state.cells[cell_id];
+  state.cellOrder = state.cellOrder.filter((id) => id !== cell_id);
 }
 
 function updateCellContent(

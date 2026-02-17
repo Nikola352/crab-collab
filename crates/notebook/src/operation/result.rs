@@ -1,4 +1,4 @@
-use crate::notebook::Cell;
+use crate::notebook::{Cell, CellId};
 
 #[derive(Debug, Clone)]
 pub struct OperationResult {
@@ -11,5 +11,8 @@ pub enum OperationResultData {
     InsertCell {
         position: usize,
         cell: Cell
+    },
+    DeleteCell {
+        cell_id: CellId,
     },
 }
