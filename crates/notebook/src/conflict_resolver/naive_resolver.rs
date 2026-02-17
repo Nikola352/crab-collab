@@ -25,38 +25,10 @@ impl NotebookStateHolder for NaiveStateHolder {
     ) -> Result<OperationResult, NotebookError> {
         let mut state = self.inner.write().await;
         let result = match operation {
-            Operation::InsertCell { index, ref cell } => {
-                let real_index = state.transform_index(index, base_version);
-                state.apply_insert(real_index, cell.clone())?;
-                Ok(OperationResult {
-                    version: state.version + 1,
-                    data: OperationResultData::InsertCell {
-                        position: real_index,
-                        cell: cell.clone(),
-                    },
-                })
-            }
-            Operation::DeleteCell { cell_id } => {
-                let from_index = state.apply_delete(cell_id)?;
-                Ok(OperationResult {
-                    version: state.version + 1,
-                    data: OperationResultData::DeleteCell {
-                        cell_id,
-                        from_index,
-                    },
-                })
-            }
+            Operation::InsertCell { index, cell } => state.apply_insert(index, cell, base_version),
+            Operation::DeleteCell { cell_id } => state.apply_delete(cell_id),
             Operation::MoveCell { cell_id, to_index } => {
-                let real_to_index = state.transform_index(to_index, base_version);
-                let (from_index, actual_to_index) = state.apply_move(cell_id, real_to_index)?;
-                Ok(OperationResult {
-                    version: state.version + 1,
-                    data: OperationResultData::MoveCell {
-                        cell_id,
-                        from_index,
-                        to_index: actual_to_index,
-                    },
-                })
+                state.apply_move(cell_id, to_index, base_version)
             }
         }?;
         state.version += 1;
@@ -115,35 +87,70 @@ impl State {
                         index += 1;
                     }
                 }
+                _ => {}
             }
         }
         index
     }
 
-    fn apply_insert(&mut self, index: usize, cell: Cell) -> Result<(), NotebookError> {
-        if index > self.notebook.cells().len() {
-            return Err(InvalidIndex(index));
+    fn apply_insert(
+        &mut self,
+        index: usize,
+        cell: Cell,
+        base_version: u64,
+    ) -> Result<OperationResult, NotebookError> {
+        let real_index = self.transform_index(index, base_version);
+
+        if real_index > self.notebook.cells().len() {
+            return Err(InvalidIndex(real_index));
         }
-        self.notebook.insert_cell(cell, index)?;
-        Ok(())
+
+        self.notebook.insert_cell(cell.clone(), real_index)?;
+
+        Ok(OperationResult {
+            version: self.version + 1,
+            data: OperationResultData::InsertCell {
+                position: real_index,
+                cell,
+            },
+        })
     }
 
-    fn apply_delete(&mut self, cell_id: CellId) -> Result<usize, NotebookError> {
+    fn apply_delete(&mut self, cell_id: CellId) -> Result<OperationResult, NotebookError> {
         let from_index = self
             .notebook
             .cells()
             .iter()
             .position(|c| c.id == cell_id)
             .unwrap_or(0);
+
         self.notebook.delete_cell(cell_id)?;
-        Ok(from_index)
+
+        Ok(OperationResult {
+            version: self.version + 1,
+            data: OperationResultData::DeleteCell {
+                cell_id,
+                from_index,
+            },
+        })
     }
 
     fn apply_move(
         &mut self,
         cell_id: CellId,
         to_index: usize,
-    ) -> Result<(usize, usize), NotebookError> {
-        self.notebook.move_cell(cell_id, to_index)
+        base_version: u64,
+    ) -> Result<OperationResult, NotebookError> {
+        let real_to_index = self.transform_index(to_index, base_version);
+        let (from_index, actual_to_index) = self.notebook.move_cell(cell_id, real_to_index)?;
+
+        Ok(OperationResult {
+            version: self.version + 1,
+            data: OperationResultData::MoveCell {
+                cell_id,
+                from_index,
+                to_index: actual_to_index,
+            },
+        })
     }
 }
