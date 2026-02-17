@@ -51,13 +51,20 @@ export interface TextDeleteMessage {
   end_position: number;
 }
 
+export interface ChangeFocusMessage {
+  type: "change_focus";
+  cell_id: CellId;
+  cursor_position: number;
+}
+
 export type ClientMessage =
   | JoinMessage
   | CellInsertMessage
   | CellDeleteMessage
   | CellMoveMessage
   | TextInsertMessage
-  | TextDeleteMessage;
+  | TextDeleteMessage
+  | ChangeFocusMessage;
 
 export function isJoinMessage(message: ClientMessage): message is JoinMessage {
   return message.type === "join";

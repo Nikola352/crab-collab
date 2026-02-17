@@ -10,6 +10,7 @@ interface CellListProps {
   onDeleteCell: (cellId: CellId) => void;
   onMoveCell: (cellId: CellId, toIndex: number) => void;
   onContentChange: (cellId: CellId, content: string) => void;
+  onFocusChange: (cellId: CellId, cursorPosition: number) => void;
 }
 
 function InsertButton({
@@ -70,6 +71,7 @@ export function CellList({
   onDeleteCell,
   onMoveCell,
   onContentChange,
+  onFocusChange,
 }: CellListProps) {
   const cellIds = useNotebookStore((state) => state.cellOrder);
   const users = useUserStore((state) => state.users);
@@ -122,6 +124,7 @@ export function CellList({
                   : undefined
               }
               onContentChange={onContentChange}
+              onFocusChange={onFocusChange}
             />
             <InsertButton index={i + 1} onInsertCell={onInsertCell} />
           </div>

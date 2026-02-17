@@ -47,6 +47,26 @@ pub async fn handle_leave(
     Ok(())
 }
 
+pub async fn handle_change_focus(
+    user_id: UserId,
+    cell_id: CellId,
+    cursor_position: usize,
+    state: &AppState,
+) -> Result<(), Box<dyn std::error::Error>> {
+    set_focus(user_id, cell_id, Some(cursor_position), state).await;
+    state
+        .broadcast(
+            ServerMessage::ChangeFocus {
+                user_id,
+                cell_id,
+                cursor_position,
+            },
+            Some(user_id),
+        )
+        .await?;
+    Ok(())
+}
+
 pub async fn set_focus(
     user_id: UserId,
     cell_id: CellId,

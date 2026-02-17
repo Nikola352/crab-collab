@@ -14,6 +14,7 @@ interface CellWrapperProps {
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   onContentChange: (cellId: CellId, content: string) => void;
+  onFocusChange: (cellId: CellId, cursorPosition: number) => void;
 }
 
 export function CellWrapper({
@@ -23,6 +24,7 @@ export function CellWrapper({
   onMoveUp,
   onMoveDown,
   onContentChange,
+  onFocusChange,
 }: CellWrapperProps) {
   const hasFocus = focusedByUsers.length > 0;
   const borderColor = hasFocus ? getUserColor(focusedByUsers[0].id) : undefined;
@@ -80,9 +82,18 @@ export function CellWrapper({
         </button>
       </div>
       {isCodeCell(cell) ? (
-        <CodeCell cell={cell} onContentChange={onContentChange} />
+        <CodeCell
+          cell={cell}
+          onContentChange={onContentChange}
+          onFocusChange={onFocusChange}
+          focusedByUsers={focusedByUsers}
+        />
       ) : (
-        <MarkdownCell cell={cell} onContentChange={onContentChange} />
+        <MarkdownCell
+          cell={cell}
+          onContentChange={onContentChange}
+          onFocusChange={onFocusChange}
+        />
       )}
     </div>
   );

@@ -43,6 +43,10 @@ pub enum ClientMessage {
         start_position: usize,
         end_position: usize,
     },
+    ChangeFocus {
+        cell_id: CellId,
+        cursor_position: usize,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -93,5 +97,10 @@ pub enum ServerMessage {
     OperationFailed {
         context: StateUpdateContext,
         message: String,
+    },
+    ChangeFocus {
+        user_id: UserId,
+        cell_id: CellId,
+        cursor_position: usize,
     },
 }

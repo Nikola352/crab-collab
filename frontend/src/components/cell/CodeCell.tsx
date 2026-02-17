@@ -1,21 +1,88 @@
-import { memo, useCallback } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
+import type { editor } from "monaco-editor";
 import type { CellId, CodeCell as CodeCellType } from "../../types/cell";
+import type { User } from "../../types/user";
+import { getUserColorIndex } from "../../utils/userColors";
 import { OutputArea } from "./OutputArea";
 
 interface CodeCellProps {
   cell: CodeCellType;
   onContentChange: (cellId: CellId, content: string) => void;
+  onFocusChange: (cellId: CellId, cursorPosition: number) => void;
+  focusedByUsers: User[];
 }
 
 export const CodeCell = memo(function CodeCell({
   cell,
   onContentChange,
+  onFocusChange,
+  focusedByUsers,
 }: CodeCellProps) {
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(
+    null,
+  );
+
   const setContent = useCallback(
     (content: string) => onContentChange(cell.id, content),
     [onContentChange, cell.id],
   );
+
+  const handleMount = useCallback(
+    (ed: editor.IStandaloneCodeEditor) => {
+      editorRef.current = ed;
+      decorationsRef.current = ed.createDecorationsCollection([]);
+
+      ed.onDidChangeCursorPosition((e) => {
+        const offset = ed.getModel()?.getOffsetAt(e.position);
+        if (offset !== undefined) {
+          onFocusChange(cell.id, offset);
+        }
+      });
+
+      ed.onDidFocusEditorText(() => {
+        const model = ed.getModel();
+        const pos = ed.getPosition();
+        if (model && pos) {
+          onFocusChange(cell.id, model.getOffsetAt(pos));
+        }
+      });
+    },
+    [cell.id, onFocusChange],
+  );
+
+  // Update remote cursor decorations when focusedByUsers changes
+  useEffect(() => {
+    const ed = editorRef.current;
+    const collection = decorationsRef.current;
+    if (!ed || !collection) return;
+
+    const model = ed.getModel();
+    if (!model) return;
+
+    const decorations: editor.IModelDeltaDecoration[] = focusedByUsers
+      .filter((u) => u.cursor_position != null)
+      .map((user) => {
+        const position = model.getPositionAt(user.cursor_position!);
+        const colorIndex = getUserColorIndex(user.id);
+        return {
+          range: {
+            startLineNumber: position.lineNumber,
+            startColumn: position.column,
+            endLineNumber: position.lineNumber,
+            endColumn: position.column,
+          },
+          options: {
+            className: `remote-cursor-${colorIndex}`,
+            hoverMessage: { value: user.name ?? "Anonymous" },
+            stickiness: 1, // NeverGrowsWhenTypingAtEdges
+          },
+        };
+      });
+
+    collection.set(decorations);
+  }, [focusedByUsers]);
 
   const executionLabel =
     cell.execution_number !== null ? `[${cell.execution_number}]` : "[ ]";
@@ -35,6 +102,7 @@ export const CodeCell = memo(function CodeCell({
             language="python"
             value={cell.content}
             onChange={(value) => setContent(value ?? "")}
+            onMount={handleMount}
             theme="vs-dark"
             options={{
               minimap: { enabled: false },

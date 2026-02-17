@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 
 import { useWebSocket } from "../../hooks/useWebsocket";
 import { useTextSync } from "../../hooks/useTextSync";
+import { useFocusSync } from "../../hooks/useFocusSync";
 import { useNotebookStore } from "../../stores/notebookStore";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useUserStore } from "../../stores/userStore";
@@ -20,6 +21,7 @@ import type {
   TextInsertMessage,
   TextDeleteMessage,
   OperationFailedMessage,
+  ChangeFocusMessage,
 } from "../../types/server-message";
 import type {
   DeleteOp,
@@ -40,6 +42,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
   const { isConnected, send, on } = useWebSocket(`${VITE_WS_BASE_URL}/ws`);
   const hasJoined = useRef(false);
   const textSync = useTextSync(send);
+  const { sendFocusChange } = useFocusSync(send);
 
   const setSession = useSessionStore((state) => state.setSession);
   const setCells = useNotebookStore((state) => state.setCells);
@@ -47,6 +50,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
   const setUsers = useUserStore((state) => state.setUsers);
   const addUser = useUserStore((state) => state.addUser);
   const removeUser = useUserStore((state) => state.removeUser);
+  const updateUser = useUserStore((state) => state.updateUser);
   const insertCell = useNotebookStore((state) => state.insertCell);
   const removeCell = useNotebookStore((state) => state.removeCell);
   const moveCellStore = useNotebookStore((state) => state.moveCell);
@@ -169,8 +173,14 @@ export function NotebookView({ userName }: NotebookViewProps) {
         msg.cell_id,
         useNotebookStore.getState().getCell(msg.cell_id)?.content ?? "",
       );
+      if (!isOwn) {
+        updateUser(msg.context.user_id, {
+          focused_cell: msg.cell_id,
+          cursor_position: msg.start_position + msg.text.length,
+        });
+      }
     },
-    [receiveServerOperation, textSync],
+    [receiveServerOperation, textSync, updateUser],
   );
 
   const handleTextDelete = useCallback(
@@ -189,8 +199,24 @@ export function NotebookView({ userName }: NotebookViewProps) {
         msg.cell_id,
         useNotebookStore.getState().getCell(msg.cell_id)?.content ?? "",
       );
+      if (!isOwn) {
+        updateUser(msg.context.user_id, {
+          focused_cell: msg.cell_id,
+          cursor_position: msg.start_position,
+        });
+      }
     },
-    [receiveServerOperation, textSync],
+    [receiveServerOperation, textSync, updateUser],
+  );
+
+  const handleChangeFocus = useCallback(
+    (msg: ChangeFocusMessage) => {
+      updateUser(msg.user_id, {
+        focused_cell: msg.cell_id,
+        cursor_position: msg.cursor_position,
+      });
+    },
+    [updateUser],
   );
 
   useEffect(() => {
@@ -205,6 +231,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
     on("operation_failed", (msg) =>
       handleOperationFailed(msg as OperationFailedMessage),
     );
+    on("change_focus", (msg) => handleChangeFocus(msg as ChangeFocusMessage));
   }, [
     on,
     handleFullState,
@@ -216,6 +243,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
     handleTextInsert,
     handleTextDelete,
     handleOperationFailed,
+    handleChangeFocus,
   ]);
 
   useEffect(() => {
@@ -312,6 +340,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
           onDeleteCell={handleDeleteCell}
           onMoveCell={handleMoveCell}
           onContentChange={handleContentChange}
+          onFocusChange={sendFocusChange}
         />
       </main>
     </div>

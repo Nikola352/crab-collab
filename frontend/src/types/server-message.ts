@@ -74,6 +74,13 @@ export interface OperationFailedMessage {
   message: string;
 }
 
+export interface ChangeFocusMessage {
+  type: "change_focus";
+  user_id: UserId;
+  cell_id: CellId;
+  cursor_position: number;
+}
+
 export type ServerMessage =
   | JoinMessage
   | LeaveMessage
@@ -83,7 +90,8 @@ export type ServerMessage =
   | CellMoveMessage
   | TextInsertMessage
   | TextDeleteMessage
-  | OperationFailedMessage;
+  | OperationFailedMessage
+  | ChangeFocusMessage;
 
 // Type guards
 export function isJoinMessage(message: ServerMessage): message is JoinMessage {
@@ -130,4 +138,10 @@ export function isTextDeleteMessage(
   message: ServerMessage,
 ): message is TextDeleteMessage {
   return message.type === "text_delete";
+}
+
+export function isChangeFocusMessage(
+  message: ServerMessage,
+): message is ChangeFocusMessage {
+  return message.type === "change_focus";
 }

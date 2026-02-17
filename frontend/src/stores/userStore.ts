@@ -6,6 +6,7 @@ interface UserState {
   setUsers: (users: User[]) => void;
   addUser: (user: User) => void;
   removeUser: (userId: UserId) => void;
+  updateUser: (userId: UserId, updates: Partial<User>) => void;
 }
 
 export const useUserStore = create<UserState>((set) => ({
@@ -20,5 +21,11 @@ export const useUserStore = create<UserState>((set) => ({
   removeUser: (userId) =>
     set((state) => ({
       users: state.users.filter((u) => u.id !== userId),
+    })),
+  updateUser: (userId, updates) =>
+    set((state) => ({
+      users: state.users.map((u) =>
+        u.id === userId ? { ...u, ...updates } : u,
+      ),
     })),
 }));

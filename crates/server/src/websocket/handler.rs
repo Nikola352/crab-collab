@@ -136,6 +136,10 @@ async fn handle_client_message(
             )
             .await?
         }
+        ClientMessage::ChangeFocus {
+            cell_id,
+            cursor_position,
+        } => handler::user::handle_change_focus(user_id, cell_id, cursor_position, state).await?,
     };
     Ok(())
 }

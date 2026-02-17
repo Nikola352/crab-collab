@@ -10,11 +10,13 @@ import type {
 interface MarkdownCellProps {
   cell: MarkdownCellType;
   onContentChange: (cellId: CellId, content: string) => void;
+  onFocusChange: (cellId: CellId, cursorPosition: number) => void;
 }
 
 export const MarkdownCell = memo(function MarkdownCell({
   cell,
   onContentChange,
+  onFocusChange,
 }: MarkdownCellProps) {
   const [isEditing, setIsEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -54,6 +56,12 @@ export const MarkdownCell = memo(function MarkdownCell({
           onChange={(e) => setContent(e.target.value)}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
+          onSelect={() =>
+            onFocusChange(cell.id, textareaRef.current?.selectionStart ?? 0)
+          }
+          onFocus={() =>
+            onFocusChange(cell.id, textareaRef.current?.selectionStart ?? 0)
+          }
           className="w-full min-h-32 p-4 bg-transparent text-gray-100 font-mono text-sm resize-y focus:outline-none"
           placeholder="Enter markdown..."
         />
