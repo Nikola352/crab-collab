@@ -84,16 +84,25 @@ async fn handle_client_message(
         ClientMessage::Join { name } => handler::user::handle_join(user_id, name, state).await?,
         ClientMessage::CellInsert {
             context,
-            position,
+            index,
             cell_id,
             cell_type,
             content,
         } => {
-            handler::notebook::handle_insert_cell(user_id, context, position, cell_id, cell_type, content, state)
-                .await?
-        },
+            handler::notebook::handle_insert_cell(
+                user_id, context, index, cell_id, cell_type, content, state,
+            )
+            .await?
+        }
         ClientMessage::CellDelete { context, cell_id } => {
             handler::notebook::handle_delete_cell(user_id, context, cell_id, state).await?
+        }
+        ClientMessage::CellMove {
+            context,
+            cell_id,
+            to_index,
+        } => {
+            handler::notebook::handle_move_cell(user_id, context, cell_id, to_index, state).await?
         }
     };
     Ok(())

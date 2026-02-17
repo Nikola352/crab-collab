@@ -5,7 +5,7 @@ export type RequestId = string & { readonly __brand: "request-id" };
 export interface Operation {
   id: RequestId;
   version: number;
-  type: "insert" | "update_content" | "delete" | "noop";
+  type: "insert" | "update_content" | "delete" | "move" | "noop";
 }
 
 export type InsertOp = Operation & {
@@ -25,6 +25,12 @@ export type UpdateContentOp = Operation & {
   content: string;
 };
 
+export type MoveOp = Operation & {
+  type: "move";
+  cell_id: CellId;
+  to_index: number;
+};
+
 export type NoOp = Operation & {
   type: "noop";
 };
@@ -41,6 +47,10 @@ export function isUpdateContentOp(
   operation: Operation,
 ): operation is UpdateContentOp {
   return operation.type === "update_content";
+}
+
+export function isMoveOp(operation: Operation): operation is MoveOp {
+  return operation.type === "move";
 }
 
 export function isNoOp(operation: Operation): operation is NoOp {

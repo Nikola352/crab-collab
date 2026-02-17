@@ -16,4 +16,9 @@ pub enum OperationResultData {
         cell_id: CellId,
         from_index: usize,
     },
+    MoveCell {
+        cell_id: CellId,
+        from_index: usize,
+        to_index: usize,
+    },
 }

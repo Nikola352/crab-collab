@@ -37,18 +37,24 @@ impl NotebookStateHolder for NaiveStateHolder {
                 })
             }
             Operation::DeleteCell { cell_id } => {
-                let from_index = state
-                    .notebook
-                    .cells()
-                    .iter()
-                    .position(|c| c.id == cell_id)
-                    .unwrap_or(0);
-                state.apply_delete(cell_id)?;
+                let from_index = state.apply_delete(cell_id)?;
                 Ok(OperationResult {
                     version: state.version + 1,
                     data: OperationResultData::DeleteCell {
                         cell_id,
                         from_index,
+                    },
+                })
+            }
+            Operation::MoveCell { cell_id, to_index } => {
+                let real_to_index = state.transform_index(to_index, base_version);
+                let (from_index, actual_to_index) = state.apply_move(cell_id, real_to_index)?;
+                Ok(OperationResult {
+                    version: state.version + 1,
+                    data: OperationResultData::MoveCell {
+                        cell_id,
+                        from_index,
+                        to_index: actual_to_index,
                     },
                 })
             }
@@ -97,6 +103,18 @@ impl State {
                         index -= 1;
                     }
                 }
+                OperationResultData::MoveCell {
+                    from_index,
+                    to_index,
+                    ..
+                } => {
+                    if from_index < index {
+                        index -= 1;
+                    }
+                    if to_index <= index {
+                        index += 1;
+                    }
+                }
             }
         }
         index
@@ -110,8 +128,22 @@ impl State {
         Ok(())
     }
 
-    fn apply_delete(&mut self, cell_id: CellId) -> Result<(), NotebookError> {
+    fn apply_delete(&mut self, cell_id: CellId) -> Result<usize, NotebookError> {
+        let from_index = self
+            .notebook
+            .cells()
+            .iter()
+            .position(|c| c.id == cell_id)
+            .unwrap_or(0);
         self.notebook.delete_cell(cell_id)?;
-        Ok(())
+        Ok(from_index)
+    }
+
+    fn apply_move(
+        &mut self,
+        cell_id: CellId,
+        to_index: usize,
+    ) -> Result<(usize, usize), NotebookError> {
+        self.notebook.move_cell(cell_id, to_index)
     }
 }

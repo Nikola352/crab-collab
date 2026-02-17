@@ -17,7 +17,7 @@ pub enum ClientMessage {
     },
     CellInsert {
         context: OperationContext,
-        position: usize,
+        index: usize,
         cell_id: CellId,
         cell_type: CellType,
         content: Option<String>,
@@ -25,7 +25,12 @@ pub enum ClientMessage {
     CellDelete {
         context: OperationContext,
         cell_id: CellId,
-    }
+    },
+    CellMove {
+        context: OperationContext,
+        cell_id: CellId,
+        to_index: usize,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -46,12 +51,18 @@ pub enum ServerMessage {
     },
     CellInsert {
         context: StateUpdateContext,
-        position: usize,
+        index: usize,
         cell: Cell,
     },
     CellDelete {
         context: StateUpdateContext,
         cell_id: CellId,
+    },
+    CellMove {
+        context: StateUpdateContext,
+        cell_id: CellId,
+        from_index: usize,
+        to_index: usize,
     },
 
     OperationFailed {

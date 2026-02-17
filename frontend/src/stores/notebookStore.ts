@@ -5,8 +5,10 @@ import { immer } from "zustand/middleware/immer";
 import {
   type DeleteOp,
   type InsertOp,
+  type MoveOp,
   isDeleteOp,
   isInsertOp,
+  isMoveOp,
   isUpdateContentOp,
   type Operation,
   type RequestId,
@@ -38,6 +40,7 @@ interface NotebookState {
   setCells: (cells: Cell[]) => void;
   insertCell: (cell: Cell, index: number) => RequestId;
   removeCell: (cell: Cell) => RequestId;
+  moveCell: (cellId: string, toIndex: number) => RequestId;
   updateCellContent: (cellId: string, content: string) => RequestId;
   receiveServerOperation: (operation: Operation, isOwn: boolean) => void;
 }
@@ -108,6 +111,21 @@ export const useNotebookStore = create<NotebookState>()(
       return id;
     },
 
+    moveCell: (cellId: string, toIndex: number) => {
+      const id = uuidv4() as RequestId;
+      set((state) => {
+        const op = {
+          id,
+          version: state.version,
+          type: "move",
+          cell_id: cellId,
+          to_index: toIndex,
+        } as MoveOp;
+        applyLocalOperation(state, op);
+      });
+      return id;
+    },
+
     receiveServerOperation: (operation, isOwn) =>
       set((state) => {
         if (state.unconfirmedOperations.length == 0) {
@@ -164,6 +182,7 @@ function syncWithServer(state: NotebookState) {
 function handleOperation(state: NotebookState, operation: Operation) {
   if (isInsertOp(operation)) insertCell(state, operation);
   else if (isDeleteOp(operation)) deleteCell(state, operation);
+  else if (isMoveOp(operation)) moveCellInOrder(state, operation);
   else if (isUpdateContentOp(operation)) updateCellContent(state, operation);
 }
 
@@ -180,6 +199,14 @@ function insertCell(state: NotebookState, { cell, index }: InsertOp) {
 function deleteCell(state: NotebookState, { cell_id }: DeleteOp) {
   delete state.cells[cell_id];
   state.cellOrder = state.cellOrder.filter((id) => id !== cell_id);
+}
+
+function moveCellInOrder(state: NotebookState, { cell_id, to_index }: MoveOp) {
+  const currentIndex = state.cellOrder.indexOf(cell_id);
+  if (currentIndex === -1) return;
+  state.cellOrder.splice(currentIndex, 1);
+  const clamped = Math.min(to_index, state.cellOrder.length);
+  state.cellOrder.splice(clamped, 0, cell_id);
 }
 
 function updateCellContent(

@@ -15,9 +15,10 @@ import type {
   LeaveMessage,
   CellInsertMessage,
   CellDeleteMessage,
+  CellMoveMessage,
   OperationFailedMessage,
 } from "../../types/server-message";
-import type { DeleteOp, InsertOp, NoOp } from "../../types/operation";
+import type { DeleteOp, InsertOp, MoveOp, NoOp } from "../../types/operation";
 import type { Cell, CellId, CellType } from "../../types/cell";
 const { VITE_WS_BASE_URL } = import.meta.env;
 
@@ -37,6 +38,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
   const removeUser = useUserStore((state) => state.removeUser);
   const insertCell = useNotebookStore((state) => state.insertCell);
   const removeCell = useNotebookStore((state) => state.removeCell);
+  const moveCellStore = useNotebookStore((state) => state.moveCell);
   const receiveServerOperation = useNotebookStore(
     (state) => state.receiveServerOperation,
   );
@@ -83,7 +85,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
         version: msg.context.version,
         type: "insert",
         cell: msg.cell,
-        index: msg.position,
+        index: msg.index,
       };
       const isOwn = msg.context.user_id === useSessionStore.getState().userId;
       receiveServerOperation(operation, isOwn);
@@ -98,6 +100,21 @@ export function NotebookView({ userName }: NotebookViewProps) {
         version: msg.context.version,
         type: "delete",
         cell_id: msg.cell_id,
+      };
+      const isOwn = msg.context.user_id === useSessionStore.getState().userId;
+      receiveServerOperation(operation, isOwn);
+    },
+    [receiveServerOperation],
+  );
+
+  const handleCellMove = useCallback(
+    (msg: CellMoveMessage) => {
+      const operation: MoveOp = {
+        id: msg.context.request_id,
+        version: msg.context.version,
+        type: "move",
+        cell_id: msg.cell_id,
+        to_index: msg.to_index,
       };
       const isOwn = msg.context.user_id === useSessionStore.getState().userId;
       receiveServerOperation(operation, isOwn);
@@ -126,6 +143,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
     on("leave", (msg) => handleLeave(msg as LeaveMessage));
     on("cell_insert", (msg) => handleCellInsert(msg as CellInsertMessage));
     on("cell_delete", (msg) => handleCellDelete(msg as CellDeleteMessage));
+    on("cell_move", (msg) => handleCellMove(msg as CellMoveMessage));
     on("operation_failed", (msg) =>
       handleOperationFailed(msg as OperationFailedMessage),
     );
@@ -136,6 +154,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
     handleLeave,
     handleCellInsert,
     handleCellDelete,
+    handleCellMove,
     handleOperationFailed,
   ]);
 
@@ -172,7 +191,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
           base_version: useNotebookStore.getState().version,
           request_id: requestId,
         },
-        position: index,
+        index,
         cell_id: uuidv4() as CellId,
         cell_type: cellType,
       });
@@ -199,11 +218,28 @@ export function NotebookView({ userName }: NotebookViewProps) {
     [removeCell, send],
   );
 
+  const handleMoveCell = useCallback(
+    (cellId: CellId, toIndex: number) => {
+      const requestId = moveCellStore(cellId, toIndex);
+
+      send({
+        type: "cell_move",
+        context: {
+          base_version: useNotebookStore.getState().version,
+          request_id: requestId,
+        },
+        cell_id: cellId,
+        to_index: toIndex,
+      });
+    },
+    [moveCellStore, send],
+  );
+
   return (
     <div className="min-h-screen bg-gray-900">
       <NotebookHeader />
       <main className="max-w-4xl mx-auto px-6 py-6">
-        <CellList onInsertCell={handleInsertCell} onDeleteCell={handleDeleteCell} />
+        <CellList onInsertCell={handleInsertCell} onDeleteCell={handleDeleteCell} onMoveCell={handleMoveCell} />
       </main>
     </div>
   );

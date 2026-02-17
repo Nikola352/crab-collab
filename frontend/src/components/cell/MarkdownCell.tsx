@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -10,7 +10,7 @@ interface MarkdownCellProps {
   cell: MarkdownCellType;
 }
 
-export function MarkdownCell({ cell }: MarkdownCellProps) {
+export const MarkdownCell = memo(function MarkdownCell({ cell }: MarkdownCellProps) {
   const [isEditing, setIsEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const content = cell.content;
@@ -73,4 +73,4 @@ export function MarkdownCell({ cell }: MarkdownCellProps) {
       )}
     </div>
   );
-}
+});

@@ -10,14 +10,14 @@ use std::error::Error;
 pub async fn handle_insert_cell(
     user_id: UserId,
     context: OperationContext,
-    position: usize,
+    index: usize,
     cell_id: CellId,
     cell_type: CellType,
     content: Option<String>,
     state: &AppState,
 ) -> Result<(), Box<dyn Error>> {
     let operation = Operation::InsertCell {
-        index: position,
+        index,
         cell: match cell_type {
             CellType::Markdown => {
                 Cell::new_markdown_with_id(cell_id, content.unwrap_or(String::from("")))
@@ -33,12 +33,16 @@ pub async fn handle_insert_cell(
 
     match result {
         Ok(result) => {
-            if let OperationResultData::InsertCell { position, cell } = result.data {
+            if let OperationResultData::InsertCell {
+                position: index,
+                cell,
+            } = result.data
+            {
                 state
                     .broadcast(
                         ServerMessage::CellInsert {
                             context: create_output_context(result.version, user_id, &context),
-                            position,
+                            index,
                             cell,
                         },
                         None,
@@ -75,6 +79,49 @@ pub async fn handle_delete_cell(
                         ServerMessage::CellDelete {
                             context: create_output_context(result.version, user_id, &context),
                             cell_id,
+                        },
+                        None,
+                    )
+                    .await?;
+            } else {
+                tracing::error!("Operation produced incorrect result type. Result: {result:?}");
+            }
+        }
+        Err(err) => send_error_message(user_id, &context, state, err).await?,
+    }
+
+    Ok(())
+}
+
+pub async fn handle_move_cell(
+    user_id: UserId,
+    context: OperationContext,
+    cell_id: CellId,
+    to_index: usize,
+    state: &AppState,
+) -> Result<(), Box<dyn Error>> {
+    let operation = Operation::MoveCell { cell_id, to_index };
+
+    let result = state
+        .notebook
+        .apply_operation(operation, context.base_version)
+        .await;
+
+    match result {
+        Ok(result) => {
+            if let OperationResultData::MoveCell {
+                cell_id,
+                from_index,
+                to_index,
+            } = result.data
+            {
+                state
+                    .broadcast(
+                        ServerMessage::CellMove {
+                            context: create_output_context(result.version, user_id, &context),
+                            cell_id,
+                            from_index,
+                            to_index,
                         },
                         None,
                     )

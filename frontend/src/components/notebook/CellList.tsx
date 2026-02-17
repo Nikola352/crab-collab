@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNotebookStore } from "../../stores/notebookStore";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useUserStore } from "../../stores/userStore";
@@ -8,6 +8,7 @@ import type { CellId, CellType } from "../../types/cell";
 interface CellListProps {
   onInsertCell: (index: number, cellType: CellType) => void;
   onDeleteCell: (cellId: CellId) => void;
+  onMoveCell: (cellId: CellId, toIndex: number) => void;
 }
 
 function InsertButton({
@@ -63,10 +64,22 @@ function InsertButton({
   );
 }
 
-export function CellList({ onInsertCell, onDeleteCell }: CellListProps) {
+export function CellList({ onInsertCell, onDeleteCell, onMoveCell }: CellListProps) {
   const cellIds = useNotebookStore((state) => state.cellOrder);
   const users = useUserStore((state) => state.users);
   const currentUserId = useSessionStore((state) => state.userId);
+
+  // Build a position lookup so we can render in stable DOM order
+  const positionOf = useMemo(() => {
+    const map = new Map<string, number>();
+    cellIds.forEach((id, i) => map.set(id, i));
+    return map;
+  }, [cellIds]);
+
+  // Render cells in a stable DOM order (sorted by ID) so React never
+  // needs to detach/reattach DOM nodes — Monaco editors can't survive that.
+  // CSS `order` controls the visual position instead.
+  const stableIds = useMemo(() => [...cellIds].sort(), [cellIds]);
 
   if (cellIds.length === 0) {
     return (
@@ -78,16 +91,25 @@ export function CellList({ onInsertCell, onDeleteCell }: CellListProps) {
   }
 
   return (
-    <div className="space-y-0">
-      <InsertButton index={0} onInsertCell={onInsertCell} />
-      {cellIds.map((id, i) => {
+    <div className="flex flex-col">
+      <div style={{ order: 0 }}>
+        <InsertButton index={0} onInsertCell={onInsertCell} />
+      </div>
+      {stableIds.map((id) => {
+        const i = positionOf.get(id)!;
         const focusedByUsers = users.filter(
           (user) => user.focused_cell === id && user.id !== currentUserId,
         );
 
         return (
-          <div key={id}>
-            <CellWrapper cellId={id} focusedByUsers={focusedByUsers} onDelete={() => onDeleteCell(id as CellId)} />
+          <div key={id} style={{ order: i + 1 }}>
+            <CellWrapper
+              cellId={id}
+              focusedByUsers={focusedByUsers}
+              onDelete={() => onDeleteCell(id as CellId)}
+              onMoveUp={i > 0 ? () => onMoveCell(id as CellId, i - 1) : undefined}
+              onMoveDown={i < cellIds.length - 1 ? () => onMoveCell(id as CellId, i + 1) : undefined}
+            />
             <InsertButton index={i + 1} onInsertCell={onInsertCell} />
           </div>
         );

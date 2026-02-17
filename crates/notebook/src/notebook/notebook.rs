@@ -47,6 +47,24 @@ impl Notebook {
         self.cells.remove(pos);
         Ok(())
     }
+
+    /// Moves a cell to a new index. Returns `(from_index, actual_to_index)`.
+    /// `to_index` is interpreted after removing the cell from its current position.
+    pub fn move_cell(
+        &mut self,
+        cell_id: CellId,
+        to_index: usize,
+    ) -> Result<(usize, usize), NotebookError> {
+        let from_index = self
+            .cells
+            .iter()
+            .position(|c| c.id == cell_id)
+            .ok_or(NotebookError::CellNotFound(cell_id))?;
+        let cell = self.cells.remove(from_index);
+        let clamped_index = to_index.min(self.cells.len());
+        self.cells.insert(clamped_index, cell);
+        Ok((from_index, clamped_index))
+    }
 }
 
 #[cfg(test)]

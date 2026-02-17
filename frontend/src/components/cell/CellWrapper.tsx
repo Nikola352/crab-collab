@@ -10,9 +10,11 @@ interface CellWrapperProps {
   cellId: string;
   focusedByUsers: User[];
   onDelete: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
-export function CellWrapper({ cellId, focusedByUsers, onDelete }: CellWrapperProps) {
+export function CellWrapper({ cellId, focusedByUsers, onDelete, onMoveUp, onMoveDown }: CellWrapperProps) {
   const hasFocus = focusedByUsers.length > 0;
   const borderColor = hasFocus ? getUserColor(focusedByUsers[0].id) : undefined;
   const cell = useNotebookStore((state) => state.getCell(cellId));
@@ -35,16 +37,39 @@ export function CellWrapper({ cellId, focusedByUsers, onDelete }: CellWrapperPro
           ))}
         </div>
       )}
-      <button
-        onClick={onDelete}
-        className="absolute top-2 right-2 opacity-0 group-hover/cell:opacity-100 focus:opacity-100 transition-opacity
-          w-7 h-7 rounded bg-gray-700 hover:bg-red-600 text-gray-400 hover:text-white
-          flex items-center justify-center text-sm z-10"
-        aria-label="Delete cell"
-        title="Delete cell"
-      >
-        &times;
-      </button>
+      <div className="absolute top-2 right-2 opacity-0 group-hover/cell:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-1 z-10">
+        {onMoveUp && (
+          <button
+            onClick={onMoveUp}
+            className="w-7 h-7 rounded bg-gray-700 hover:bg-gray-600 text-gray-400 hover:text-white
+              flex items-center justify-center text-sm"
+            aria-label="Move cell up"
+            title="Move cell up"
+          >
+            &#x2191;
+          </button>
+        )}
+        {onMoveDown && (
+          <button
+            onClick={onMoveDown}
+            className="w-7 h-7 rounded bg-gray-700 hover:bg-gray-600 text-gray-400 hover:text-white
+              flex items-center justify-center text-sm"
+            aria-label="Move cell down"
+            title="Move cell down"
+          >
+            &#x2193;
+          </button>
+        )}
+        <button
+          onClick={onDelete}
+          className="w-7 h-7 rounded bg-gray-700 hover:bg-red-600 text-gray-400 hover:text-white
+            flex items-center justify-center text-sm"
+          aria-label="Delete cell"
+          title="Delete cell"
+        >
+          &times;
+        </button>
+      </div>
       {isCodeCell(cell) ? (
         <CodeCell cell={cell} />
       ) : (
