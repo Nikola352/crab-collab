@@ -5,7 +5,7 @@ export type RequestId = string & { readonly __brand: "request-id" };
 export interface Operation {
   id: RequestId;
   version: number;
-  type: "insert" | "update_content" | "delete" | "move" | "noop";
+  type: "insert" | "delete" | "move" | "text_insert" | "text_delete" | "noop";
 }
 
 export type InsertOp = Operation & {
@@ -19,10 +19,18 @@ export type DeleteOp = Operation & {
   cell_id: CellId;
 };
 
-export type UpdateContentOp = Operation & {
-  type: "update_content";
-  cell_id: string;
-  content: string;
+export type TextInsertOp = Operation & {
+  type: "text_insert";
+  cell_id: CellId;
+  start_position: number;
+  text: string;
+};
+
+export type TextDeleteOp = Operation & {
+  type: "text_delete";
+  cell_id: CellId;
+  start_position: number;
+  end_position: number;
 };
 
 export type MoveOp = Operation & {
@@ -43,10 +51,16 @@ export function isDeleteOp(operation: Operation): operation is DeleteOp {
   return operation.type === "delete";
 }
 
-export function isUpdateContentOp(
+export function isTextInsertOp(
   operation: Operation,
-): operation is UpdateContentOp {
-  return operation.type === "update_content";
+): operation is TextInsertOp {
+  return operation.type === "text_insert";
+}
+
+export function isTextDeleteOp(
+  operation: Operation,
+): operation is TextDeleteOp {
+  return operation.type === "text_delete";
 }
 
 export function isMoveOp(operation: Operation): operation is MoveOp {

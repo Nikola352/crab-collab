@@ -51,6 +51,23 @@ export interface CellMoveMessage {
   to_index: number;
 }
 
+export interface TextInsertMessage {
+  type: "text_insert";
+  context: StateUpdateContext;
+  cell_id: CellId;
+  start_position: number;
+  end_position: number;
+  text: string;
+}
+
+export interface TextDeleteMessage {
+  type: "text_delete";
+  context: StateUpdateContext;
+  cell_id: CellId;
+  start_position: number;
+  end_position: number;
+}
+
 export interface OperationFailedMessage {
   type: "operation_failed";
   context: StateUpdateContext;
@@ -64,6 +81,8 @@ export type ServerMessage =
   | CellInsertMessage
   | CellDeleteMessage
   | CellMoveMessage
+  | TextInsertMessage
+  | TextDeleteMessage
   | OperationFailedMessage;
 
 // Type guards
@@ -99,4 +118,16 @@ export function isCellMoveMessage(
   message: ServerMessage,
 ): message is CellMoveMessage {
   return message.type === "cell_move";
+}
+
+export function isTextInsertMessage(
+  message: ServerMessage,
+): message is TextInsertMessage {
+  return message.type === "text_insert";
+}
+
+export function isTextDeleteMessage(
+  message: ServerMessage,
+): message is TextDeleteMessage {
+  return message.type === "text_delete";
 }

@@ -1,4 +1,5 @@
 import type { User } from "../../types/user";
+import type { CellId } from "../../types/cell";
 import { isCodeCell } from "../../types/cell";
 import { CodeCell } from "./CodeCell";
 import { MarkdownCell } from "./MarkdownCell";
@@ -12,9 +13,17 @@ interface CellWrapperProps {
   onDelete: () => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  onContentChange: (cellId: CellId, content: string) => void;
 }
 
-export function CellWrapper({ cellId, focusedByUsers, onDelete, onMoveUp, onMoveDown }: CellWrapperProps) {
+export function CellWrapper({
+  cellId,
+  focusedByUsers,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  onContentChange,
+}: CellWrapperProps) {
   const hasFocus = focusedByUsers.length > 0;
   const borderColor = hasFocus ? getUserColor(focusedByUsers[0].id) : undefined;
   const cell = useNotebookStore((state) => state.getCell(cellId));
@@ -71,9 +80,9 @@ export function CellWrapper({ cellId, focusedByUsers, onDelete, onMoveUp, onMove
         </button>
       </div>
       {isCodeCell(cell) ? (
-        <CodeCell cell={cell} />
+        <CodeCell cell={cell} onContentChange={onContentChange} />
       ) : (
-        <MarkdownCell cell={cell} />
+        <MarkdownCell cell={cell} onContentChange={onContentChange} />
       )}
     </div>
   );

@@ -30,6 +30,16 @@ impl NotebookStateHolder for NaiveStateHolder {
             Operation::MoveCell { cell_id, to_index } => {
                 state.apply_move(cell_id, to_index, base_version)
             }
+            Operation::TextInsert {
+                cell_id,
+                start_position,
+                text,
+            } => state.apply_text_insert(cell_id, start_position, text),
+            Operation::TextDelete {
+                cell_id,
+                start_position,
+                end_position,
+            } => state.apply_text_delete(cell_id, start_position, end_position),
         }?;
         state.version += 1;
         state.operation_history.push(result.clone());
@@ -150,6 +160,50 @@ impl State {
                 cell_id,
                 from_index,
                 to_index: actual_to_index,
+            },
+        })
+    }
+
+    fn apply_text_insert(
+        &mut self,
+        cell_id: CellId,
+        start_position: usize,
+        text: String,
+    ) -> Result<OperationResult, NotebookError> {
+        let cell = self.notebook.get_cell_mut(cell_id)?;
+        let clamped_start = start_position.min(cell.content.len());
+        cell.content.insert_str(clamped_start, &text);
+        let end_position = clamped_start + text.len();
+
+        Ok(OperationResult {
+            version: self.version + 1,
+            data: OperationResultData::TextInsert {
+                cell_id,
+                start_position: clamped_start,
+                end_position,
+                text,
+            },
+        })
+    }
+
+    fn apply_text_delete(
+        &mut self,
+        cell_id: CellId,
+        start_position: usize,
+        end_position: usize,
+    ) -> Result<OperationResult, NotebookError> {
+        let cell = self.notebook.get_cell_mut(cell_id)?;
+        let len = cell.content.len();
+        let clamped_start = start_position.min(len);
+        let clamped_end = end_position.min(len);
+        cell.content.drain(clamped_start..clamped_end);
+
+        Ok(OperationResult {
+            version: self.version + 1,
+            data: OperationResultData::TextDelete {
+                cell_id,
+                start_position: clamped_start,
+                end_position: clamped_end,
             },
         })
     }

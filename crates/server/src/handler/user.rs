@@ -1,5 +1,5 @@
 use crate::protocol::message::ServerMessage;
-use crate::protocol::types::UserId;
+use crate::protocol::types::{CellId, UserId};
 use crate::state::AppState;
 
 pub async fn handle_join(
@@ -45,4 +45,24 @@ pub async fn handle_leave(
         .broadcast(ServerMessage::Leave { user_id }, None)
         .await?;
     Ok(())
+}
+
+pub async fn set_focus(
+    user_id: UserId,
+    cell_id: CellId,
+    cursor_position: Option<usize>,
+    state: &AppState,
+) {
+    if let Some(user) = state.users.write().await.get_mut(&user_id) {
+        user.focused_cell = Some(cell_id);
+        user.cursor_position = cursor_position;
+    }
+}
+
+#[allow(dead_code)]
+pub async fn clear_focus(user_id: UserId, state: &AppState) {
+    if let Some(user) = state.users.write().await.get_mut(&user_id) {
+        user.focused_cell = None;
+        user.cursor_position = None;
+    }
 }

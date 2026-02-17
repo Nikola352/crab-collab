@@ -31,6 +31,18 @@ pub enum ClientMessage {
         cell_id: CellId,
         to_index: usize,
     },
+    TextInsert {
+        context: OperationContext,
+        cell_id: CellId,
+        start_position: usize,
+        text: String,
+    },
+    TextDelete {
+        context: OperationContext,
+        cell_id: CellId,
+        start_position: usize,
+        end_position: usize,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -63,6 +75,19 @@ pub enum ServerMessage {
         cell_id: CellId,
         from_index: usize,
         to_index: usize,
+    },
+    TextInsert {
+        context: StateUpdateContext,
+        cell_id: CellId,
+        start_position: usize,
+        end_position: usize,
+        text: String,
+    },
+    TextDelete {
+        context: StateUpdateContext,
+        cell_id: CellId,
+        start_position: usize,
+        end_position: usize,
     },
 
     OperationFailed {

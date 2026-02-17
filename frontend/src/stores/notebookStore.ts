@@ -6,13 +6,15 @@ import {
   type DeleteOp,
   type InsertOp,
   type MoveOp,
+  type TextInsertOp,
+  type TextDeleteOp,
   isDeleteOp,
   isInsertOp,
   isMoveOp,
-  isUpdateContentOp,
+  isTextInsertOp,
+  isTextDeleteOp,
   type Operation,
   type RequestId,
-  type UpdateContentOp,
 } from "../types/operation";
 
 import type { Cell } from "../types/cell";
@@ -41,7 +43,16 @@ interface NotebookState {
   insertCell: (cell: Cell, index: number) => RequestId;
   removeCell: (cell: Cell) => RequestId;
   moveCell: (cellId: string, toIndex: number) => RequestId;
-  updateCellContent: (cellId: string, content: string) => RequestId;
+  textInsert: (
+    cellId: string,
+    startPosition: number,
+    text: string,
+  ) => RequestId;
+  textDelete: (
+    cellId: string,
+    startPosition: number,
+    endPosition: number,
+  ) => RequestId;
   receiveServerOperation: (operation: Operation, isOwn: boolean) => void;
 }
 
@@ -70,15 +81,37 @@ export const useNotebookStore = create<NotebookState>()(
         cellOrder: cells.map((c) => c.id),
       }),
 
-    updateCellContent: (cell_id, content) => {
+    textInsert: (cellId: string, startPosition: number, text: string) => {
       const id = uuidv4() as RequestId;
       set((state) => {
         const op = {
           id,
           version: state.version,
-          cell_id,
-          content,
-        } as UpdateContentOp;
+          type: "text_insert",
+          cell_id: cellId,
+          start_position: startPosition,
+          text,
+        } as TextInsertOp;
+        applyLocalOperation(state, op);
+      });
+      return id;
+    },
+
+    textDelete: (
+      cellId: string,
+      startPosition: number,
+      endPosition: number,
+    ) => {
+      const id = uuidv4() as RequestId;
+      set((state) => {
+        const op = {
+          id,
+          version: state.version,
+          type: "text_delete",
+          cell_id: cellId,
+          start_position: startPosition,
+          end_position: endPosition,
+        } as TextDeleteOp;
         applyLocalOperation(state, op);
       });
       return id;
@@ -150,8 +183,11 @@ export const useNotebookStore = create<NotebookState>()(
 
 function applyLocalOperation(state: NotebookState, operation: Operation) {
   if (state.unconfirmedOperations.length == 0) {
-    state.confirmedState.cells = state.cells;
-    state.confirmedState.cellOrder = state.cellOrder;
+    // TODO: analyze this further
+    state.confirmedState.cells = JSON.parse(JSON.stringify(state.cells));
+    state.confirmedState.cellOrder = JSON.parse(
+      JSON.stringify(state.cellOrder),
+    );
   }
   handleOperation(state, operation);
   state.unconfirmedOperations.push(operation.id);
@@ -183,7 +219,8 @@ function handleOperation(state: NotebookState, operation: Operation) {
   if (isInsertOp(operation)) insertCell(state, operation);
   else if (isDeleteOp(operation)) deleteCell(state, operation);
   else if (isMoveOp(operation)) moveCellInOrder(state, operation);
-  else if (isUpdateContentOp(operation)) updateCellContent(state, operation);
+  else if (isTextInsertOp(operation)) insertText(state, operation);
+  else if (isTextDeleteOp(operation)) deleteText(state, operation);
 }
 
 function insertCell(state: NotebookState, { cell, index }: InsertOp) {
@@ -209,11 +246,27 @@ function moveCellInOrder(state: NotebookState, { cell_id, to_index }: MoveOp) {
   state.cellOrder.splice(clamped, 0, cell_id);
 }
 
-function updateCellContent(
+function insertText(
   state: NotebookState,
-  { cell_id, content }: UpdateContentOp,
+  { cell_id, start_position, text }: TextInsertOp,
 ) {
   if (state.cells[cell_id]) {
-    state.cells[cell_id].content = content;
+    const content = state.cells[cell_id].content;
+    const clamped = Math.min(start_position, content.length);
+    state.cells[cell_id].content =
+      content.slice(0, clamped) + text + content.slice(clamped);
+  }
+}
+
+function deleteText(
+  state: NotebookState,
+  { cell_id, start_position, end_position }: TextDeleteOp,
+) {
+  if (state.cells[cell_id]) {
+    const content = state.cells[cell_id].content;
+    const clampedStart = Math.min(start_position, content.length);
+    const clampedEnd = Math.min(end_position, content.length);
+    state.cells[cell_id].content =
+      content.slice(0, clampedStart) + content.slice(clampedEnd);
   }
 }

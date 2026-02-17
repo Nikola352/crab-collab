@@ -1,20 +1,20 @@
 import { memo, useCallback } from "react";
 import Editor from "@monaco-editor/react";
-import type { CodeCell as CodeCellType } from "../../types/cell";
+import type { CellId, CodeCell as CodeCellType } from "../../types/cell";
 import { OutputArea } from "./OutputArea";
-import { useNotebookStore } from "../../stores/notebookStore";
 
 interface CodeCellProps {
   cell: CodeCellType;
+  onContentChange: (cellId: CellId, content: string) => void;
 }
 
-export const CodeCell = memo(function CodeCell({ cell }: CodeCellProps) {
-  const updateCellContent = useNotebookStore(
-    (state) => state.updateCellContent,
-  );
+export const CodeCell = memo(function CodeCell({
+  cell,
+  onContentChange,
+}: CodeCellProps) {
   const setContent = useCallback(
-    (content: string) => updateCellContent(cell.id, content),
-    [updateCellContent, cell.id],
+    (content: string) => onContentChange(cell.id, content),
+    [onContentChange, cell.id],
   );
 
   const executionLabel =

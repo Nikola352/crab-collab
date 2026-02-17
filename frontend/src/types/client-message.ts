@@ -35,7 +35,29 @@ export interface CellMoveMessage {
   to_index: number;
 }
 
-export type ClientMessage = JoinMessage | CellInsertMessage | CellDeleteMessage | CellMoveMessage;
+export interface TextInsertMessage {
+  type: "text_insert";
+  context: OperationContext;
+  cell_id: CellId;
+  start_position: number;
+  text: string;
+}
+
+export interface TextDeleteMessage {
+  type: "text_delete";
+  context: OperationContext;
+  cell_id: CellId;
+  start_position: number;
+  end_position: number;
+}
+
+export type ClientMessage =
+  | JoinMessage
+  | CellInsertMessage
+  | CellDeleteMessage
+  | CellMoveMessage
+  | TextInsertMessage
+  | TextDeleteMessage;
 
 export function isJoinMessage(message: ClientMessage): message is JoinMessage {
   return message.type === "join";
@@ -46,7 +68,6 @@ export function isCellInsertMessage(
 ): message is CellInsertMessage {
   return message.type === "cell_insert";
 }
-
 
 export function isCellDeleteMessage(
   message: ClientMessage,

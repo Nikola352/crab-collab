@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 
 import { useWebSocket } from "../../hooks/useWebsocket";
+import { useTextSync } from "../../hooks/useTextSync";
 import { useNotebookStore } from "../../stores/notebookStore";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useUserStore } from "../../stores/userStore";
@@ -16,9 +17,18 @@ import type {
   CellInsertMessage,
   CellDeleteMessage,
   CellMoveMessage,
+  TextInsertMessage,
+  TextDeleteMessage,
   OperationFailedMessage,
 } from "../../types/server-message";
-import type { DeleteOp, InsertOp, MoveOp, NoOp } from "../../types/operation";
+import type {
+  DeleteOp,
+  InsertOp,
+  MoveOp,
+  NoOp,
+  TextInsertOp,
+  TextDeleteOp,
+} from "../../types/operation";
 import type { Cell, CellId, CellType } from "../../types/cell";
 const { VITE_WS_BASE_URL } = import.meta.env;
 
@@ -29,6 +39,7 @@ interface NotebookViewProps {
 export function NotebookView({ userName }: NotebookViewProps) {
   const { isConnected, send, on } = useWebSocket(`${VITE_WS_BASE_URL}/ws`);
   const hasJoined = useRef(false);
+  const textSync = useTextSync(send);
 
   const setSession = useSessionStore((state) => state.setSession);
   const setCells = useNotebookStore((state) => state.setCells);
@@ -49,8 +60,11 @@ export function NotebookView({ userName }: NotebookViewProps) {
       setCells(msg.notebook.cells);
       setVersion(msg.version);
       setUsers(msg.users);
+      for (const cell of msg.notebook.cells) {
+        textSync.initCell(cell.id, cell.content);
+      }
     },
-    [setSession, setCells, setUsers, setVersion, userName],
+    [setSession, setCells, setUsers, setVersion, userName, textSync],
   );
 
   const handleJoin = useCallback(
@@ -89,8 +103,9 @@ export function NotebookView({ userName }: NotebookViewProps) {
       };
       const isOwn = msg.context.user_id === useSessionStore.getState().userId;
       receiveServerOperation(operation, isOwn);
+      textSync.initCell(msg.cell.id, msg.cell.content);
     },
-    [receiveServerOperation],
+    [receiveServerOperation, textSync],
   );
 
   const handleCellDelete = useCallback(
@@ -103,8 +118,9 @@ export function NotebookView({ userName }: NotebookViewProps) {
       };
       const isOwn = msg.context.user_id === useSessionStore.getState().userId;
       receiveServerOperation(operation, isOwn);
+      textSync.removeCell(msg.cell_id);
     },
-    [receiveServerOperation],
+    [receiveServerOperation, textSync],
   );
 
   const handleCellMove = useCallback(
@@ -137,6 +153,46 @@ export function NotebookView({ userName }: NotebookViewProps) {
     [receiveServerOperation],
   );
 
+  const handleTextInsert = useCallback(
+    (msg: TextInsertMessage) => {
+      const operation: TextInsertOp = {
+        id: msg.context.request_id,
+        version: msg.context.version,
+        type: "text_insert",
+        cell_id: msg.cell_id,
+        start_position: msg.start_position,
+        text: msg.text,
+      };
+      const isOwn = msg.context.user_id === useSessionStore.getState().userId;
+      receiveServerOperation(operation, isOwn);
+      textSync.initCell(
+        msg.cell_id,
+        useNotebookStore.getState().getCell(msg.cell_id)?.content ?? "",
+      );
+    },
+    [receiveServerOperation, textSync],
+  );
+
+  const handleTextDelete = useCallback(
+    (msg: TextDeleteMessage) => {
+      const operation: TextDeleteOp = {
+        id: msg.context.request_id,
+        version: msg.context.version,
+        type: "text_delete",
+        cell_id: msg.cell_id,
+        start_position: msg.start_position,
+        end_position: msg.end_position,
+      };
+      const isOwn = msg.context.user_id === useSessionStore.getState().userId;
+      receiveServerOperation(operation, isOwn);
+      textSync.initCell(
+        msg.cell_id,
+        useNotebookStore.getState().getCell(msg.cell_id)?.content ?? "",
+      );
+    },
+    [receiveServerOperation, textSync],
+  );
+
   useEffect(() => {
     on("full_state", (msg) => handleFullState(msg as FullStateMessage));
     on("join", (msg) => handleJoin(msg as JoinMessage));
@@ -144,6 +200,8 @@ export function NotebookView({ userName }: NotebookViewProps) {
     on("cell_insert", (msg) => handleCellInsert(msg as CellInsertMessage));
     on("cell_delete", (msg) => handleCellDelete(msg as CellDeleteMessage));
     on("cell_move", (msg) => handleCellMove(msg as CellMoveMessage));
+    on("text_insert", (msg) => handleTextInsert(msg as TextInsertMessage));
+    on("text_delete", (msg) => handleTextDelete(msg as TextDeleteMessage));
     on("operation_failed", (msg) =>
       handleOperationFailed(msg as OperationFailedMessage),
     );
@@ -155,6 +213,8 @@ export function NotebookView({ userName }: NotebookViewProps) {
     handleCellInsert,
     handleCellDelete,
     handleCellMove,
+    handleTextInsert,
+    handleTextDelete,
     handleOperationFailed,
   ]);
 
@@ -164,6 +224,13 @@ export function NotebookView({ userName }: NotebookViewProps) {
       send({ type: "join", name: userName });
     }
   }, [isConnected, send, userName]);
+
+  const handleContentChange = useCallback(
+    (cellId: CellId, content: string) => {
+      textSync.scheduleSync(cellId, content);
+    },
+    [textSync],
+  );
 
   const handleInsertCell = useCallback(
     (index: number, cellType: CellType) => {
@@ -184,6 +251,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
             };
 
       const requestId = insertCell(cell, index);
+      textSync.initCell(cellId, "");
 
       send({
         type: "cell_insert",
@@ -196,7 +264,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
         cell_type: cellType,
       });
     },
-    [insertCell, send],
+    [insertCell, send, textSync],
   );
 
   const handleDeleteCell = useCallback(
@@ -239,7 +307,12 @@ export function NotebookView({ userName }: NotebookViewProps) {
     <div className="min-h-screen bg-gray-900">
       <NotebookHeader />
       <main className="max-w-4xl mx-auto px-6 py-6">
-        <CellList onInsertCell={handleInsertCell} onDeleteCell={handleDeleteCell} onMoveCell={handleMoveCell} />
+        <CellList
+          onInsertCell={handleInsertCell}
+          onDeleteCell={handleDeleteCell}
+          onMoveCell={handleMoveCell}
+          onContentChange={handleContentChange}
+        />
       </main>
     </div>
   );

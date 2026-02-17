@@ -1,3 +1,4 @@
+use crate::handler;
 use crate::protocol::message::{CellType, ServerMessage};
 use crate::protocol::types::{CellId, OperationContext, StateUpdateContext, UserId};
 use crate::state::AppState;
@@ -136,6 +137,108 @@ pub async fn handle_move_cell(
     Ok(())
 }
 
+pub async fn handle_text_insert(
+    user_id: UserId,
+    context: OperationContext,
+    cell_id: CellId,
+    start_position: usize,
+    text: String,
+    state: &AppState,
+) -> Result<(), Box<dyn Error>> {
+    let operation = Operation::TextInsert {
+        cell_id,
+        start_position,
+        text,
+    };
+
+    let result = state
+        .notebook
+        .apply_operation(operation, context.base_version)
+        .await;
+
+    match result {
+        Ok(result) => {
+            if let OperationResultData::TextInsert {
+                cell_id,
+                start_position,
+                end_position,
+                text,
+            } = result.data
+            {
+                handler::user::set_focus(user_id, cell_id, Some(end_position), state).await;
+
+                state
+                    .broadcast(
+                        ServerMessage::TextInsert {
+                            context: create_output_context(result.version, user_id, &context),
+                            cell_id,
+                            start_position,
+                            end_position,
+                            text,
+                        },
+                        None,
+                    )
+                    .await?;
+            } else {
+                tracing::error!("Operation produced incorrect result type. Result: {result:?}");
+            }
+        }
+        Err(err) => send_error_message(user_id, &context, state, err).await?,
+    }
+
+    Ok(())
+}
+
+pub async fn handle_text_delete(
+    user_id: UserId,
+    context: OperationContext,
+    cell_id: CellId,
+    start_position: usize,
+    end_position: usize,
+    state: &AppState,
+) -> Result<(), Box<dyn Error>> {
+    let operation = Operation::TextDelete {
+        cell_id,
+        start_position,
+        end_position,
+    };
+
+    let result = state
+        .notebook
+        .apply_operation(operation, context.base_version)
+        .await;
+
+    match result {
+        Ok(result) => {
+            if let OperationResultData::TextDelete {
+                cell_id,
+                start_position,
+                end_position,
+            } = result.data
+            {
+                handler::user::set_focus(user_id, cell_id, Some(start_position), state).await;
+
+                state
+                    .broadcast(
+                        ServerMessage::TextDelete {
+                            context: create_output_context(result.version, user_id, &context),
+                            cell_id,
+                            start_position,
+                            end_position,
+                        },
+                        None,
+                    )
+                    .await?;
+            } else {
+                tracing::error!("Operation produced incorrect result type. Result: {result:?}");
+            }
+        }
+        Err(err) => send_error_message(user_id, &context, state, err).await?,
+    }
+
+    Ok(())
+}
+
 fn create_output_context(
     version: u64,
     user_id: UserId,
@@ -154,7 +257,7 @@ async fn send_error_message(
     state: &AppState,
     err: NotebookError,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(user) = state.users.read().await.values().find(|u| u.id == user_id) {
+    if let Some(user) = state.users.read().await.get(&user_id) {
         user.tx_channel
             .send(ServerMessage::OperationFailed {
                 context: StateUpdateContext {

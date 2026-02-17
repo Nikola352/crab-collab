@@ -2,24 +2,26 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { useNotebookStore } from "../../stores/notebookStore";
-
-import type { MarkdownCell as MarkdownCellType } from "../../types/cell";
+import type {
+  CellId,
+  MarkdownCell as MarkdownCellType,
+} from "../../types/cell";
 
 interface MarkdownCellProps {
   cell: MarkdownCellType;
+  onContentChange: (cellId: CellId, content: string) => void;
 }
 
-export const MarkdownCell = memo(function MarkdownCell({ cell }: MarkdownCellProps) {
+export const MarkdownCell = memo(function MarkdownCell({
+  cell,
+  onContentChange,
+}: MarkdownCellProps) {
   const [isEditing, setIsEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const content = cell.content;
-  const updateCellContent = useNotebookStore(
-    (state) => state.updateCellContent,
-  );
   const setContent = useCallback(
-    (content: string) => updateCellContent(cell.id, content),
-    [updateCellContent, cell.id],
+    (content: string) => onContentChange(cell.id, content),
+    [onContentChange, cell.id],
   );
 
   useEffect(() => {
