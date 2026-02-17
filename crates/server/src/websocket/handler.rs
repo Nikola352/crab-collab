@@ -82,6 +82,16 @@ async fn handle_client_message(
 ) -> Result<(), Box<dyn std::error::Error>> {
     match message {
         ClientMessage::Join { name } => handler::user::handle_join(user_id, name, state).await?,
+        ClientMessage::CellInsert {
+            context,
+            position,
+            cell_id,
+            cell_type,
+            content,
+        } => {
+            handler::notebook::handle_insert_cell(user_id, context, position, cell_id, cell_type, content, state)
+                .await?
+        }
     };
     Ok(())
 }
