@@ -69,7 +69,7 @@ pub async fn handle_delete_cell(
 
     match result {
         Ok(result) => {
-            if let OperationResultData::DeleteCell { cell_id } = result.data {
+            if let OperationResultData::DeleteCell { cell_id, .. } = result.data {
                 state
                     .broadcast(
                         ServerMessage::CellDelete {

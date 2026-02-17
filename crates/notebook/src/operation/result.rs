@@ -14,5 +14,6 @@ pub enum OperationResultData {
     },
     DeleteCell {
         cell_id: CellId,
+        from_index: usize,
     },
 }

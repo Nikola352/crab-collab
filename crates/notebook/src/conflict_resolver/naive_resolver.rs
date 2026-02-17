@@ -4,7 +4,6 @@ use crate::error::NotebookError::InvalidIndex;
 use crate::notebook::{Cell, CellId, Notebook};
 use crate::operation::Operation;
 use crate::operation::result::{OperationResult, OperationResultData};
-use std::collections::HashMap;
 use tokio::sync::RwLock;
 
 pub struct NaiveStateHolder {
@@ -14,8 +13,7 @@ pub struct NaiveStateHolder {
 struct State {
     version: u64,
     notebook: Notebook,
-    operation_history: Vec<Operation>,
-    delete_indexes: HashMap<CellId, usize>, // index of cell when it was deleted
+    operation_history: Vec<OperationResult>,
 }
 
 #[async_trait::async_trait]
@@ -39,16 +37,25 @@ impl NotebookStateHolder for NaiveStateHolder {
                 })
             }
             Operation::DeleteCell { cell_id } => {
+                let from_index = state
+                    .notebook
+                    .cells()
+                    .iter()
+                    .position(|c| c.id == cell_id)
+                    .unwrap_or(0);
                 state.apply_delete(cell_id)?;
                 Ok(OperationResult {
                     version: state.version + 1,
-                    data: OperationResultData::DeleteCell { cell_id },
+                    data: OperationResultData::DeleteCell {
+                        cell_id,
+                        from_index,
+                    },
                 })
             }
-        };
+        }?;
         state.version += 1;
-        state.operation_history.push(operation);
-        result
+        state.operation_history.push(result.clone());
+        Ok(result)
     }
 
     async fn get_notebook(&self) -> Notebook {
@@ -67,7 +74,6 @@ impl NaiveStateHolder {
                 version: 0,
                 notebook: Notebook::new(),
                 operation_history: Vec::new(),
-                delete_indexes: HashMap::new(),
             }),
         }
     }
@@ -77,19 +83,17 @@ impl State {
     fn transform_index(&self, mut index: usize, base_version: u64) -> usize {
         let ops = &self.operation_history[base_version as usize..self.version as usize];
         for op in ops {
-            match op {
-                Operation::InsertCell {
-                    index: insert_idx, ..
+            match op.data {
+                OperationResultData::InsertCell {
+                    position: insert_idx,
+                    ..
                 } => {
-                    if *insert_idx <= index {
+                    if insert_idx <= index {
                         index += 1;
                     }
                 }
-                Operation::DeleteCell { cell_id } => {
-                    let idx = self.delete_indexes.get(cell_id);
-                    if let Some(idx) = idx
-                        && *idx < index
-                    {
+                OperationResultData::DeleteCell { from_index, .. } => {
+                    if from_index < index {
                         index -= 1;
                     }
                 }
@@ -107,10 +111,6 @@ impl State {
     }
 
     fn apply_delete(&mut self, cell_id: CellId) -> Result<(), NotebookError> {
-        let idx = self.notebook.cells().iter().position(|c| c.id == cell_id);
-        if let Some(idx) = idx {
-            self.delete_indexes.insert(cell_id, idx);
-        }
         self.notebook.delete_cell(cell_id)?;
         Ok(())
     }
