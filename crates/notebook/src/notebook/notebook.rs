@@ -1,5 +1,5 @@
-use crate::cell::{Cell, CellId};
 use crate::error::NotebookError;
+use crate::notebook::{Cell, CellId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,7 +52,7 @@ impl Notebook {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cell::CellKind;
+    use crate::notebook::CellKind;
     use uuid::Uuid;
 
     #[test]

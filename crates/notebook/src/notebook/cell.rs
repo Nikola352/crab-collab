@@ -1,4 +1,3 @@
-use crate::cell::CellKind::Markdown;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -24,16 +23,24 @@ pub enum CellKind {
 
 impl Cell {
     pub fn new_markdown(content: String) -> Self {
+        Self::new_markdown_with_id(Uuid::new_v4(), content)
+    }
+
+    pub fn new_markdown_with_id(id: CellId, content: String) -> Self {
         Cell {
-            id: Uuid::new_v4(),
+            id,
             content,
-            kind: Markdown,
+            kind: CellKind::Markdown,
         }
     }
 
     pub fn new_code(content: String) -> Self {
+        Self::new_code_with_id(Uuid::new_v4(), content)
+    }
+
+    pub fn new_code_with_id(id: CellId, content: String) -> Self {
         Cell {
-            id: Uuid::new_v4(),
+            id,
             content,
             kind: CellKind::Code {
                 outputs: Vec::new(),
@@ -54,7 +61,7 @@ mod tests {
         assert!(!md_cell.id.is_nil());
         assert_eq!(md_cell.content, "# Hello World");
         match md_cell.kind {
-            Markdown => (), // Expected
+            CellKind::Markdown => (), // Expected
             _ => panic!("Expected Markdown cell"),
         }
 
