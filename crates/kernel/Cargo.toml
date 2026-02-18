@@ -1,0 +1,19 @@
+[package]
+name = "kernel"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+
+zeromq = "0.5.0"
+hmac = "0.13.0-rc.5"
+tracing = "0.1.44"
+sha2 = "0.11.0-rc.5"
+hex = "0.4.3"
+chrono = "0.4.43"
+lazy_static = "1.5.0"
+bytes = "1.11.1"
