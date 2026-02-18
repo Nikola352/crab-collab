@@ -107,6 +107,22 @@ impl KernelConnection {
         // [signature, header, parent_header, metadata, content]
         let after_delim = &frames[delim_pos + 1..];
 
+        if after_delim.len() < 5 {
+            return Err(KernelError::InvalidMessage(
+                "Insufficient frames after delimiter".into()
+            ));
+        }
+        let signature = std::str::from_utf8(&after_delim[0])
+            .map_err(|_| KernelError::InvalidMessage("Invalid signature encoding".into()))?;
+
+        let message_parts: Vec<&[u8]> = after_delim[1..5]
+            .iter()
+            .map(|bytes| bytes.as_ref())
+            .collect();
+        if !self.signer.verify(&message_parts, signature) {
+            return Err(KernelError::InvalidSignature);
+        }
+
         let header: Header = serde_json::from_slice(&after_delim[1])?;
         let parent_header: Option<Header> = serde_json::from_slice(&after_delim[2]).ok();
         let metadata = serde_json::from_slice(&after_delim[3])?;

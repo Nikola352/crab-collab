@@ -8,6 +8,7 @@ pub enum KernelError {
     Io(std::io::Error),
     Serialization(serde_json::Error),
     EmptyMessage,
+    InvalidSignature,
 }
 
 impl Display for KernelError {
@@ -18,6 +19,7 @@ impl Display for KernelError {
             KernelError::Io(e) => write!(f, "IO error: {e}"),
             KernelError::Serialization(e) => write!(f, "Serialization error: {e}"),
             KernelError::EmptyMessage => write!(f, "Tried to send an empty message"),
+            KernelError::InvalidSignature => write!(f, "Invalid message signature"),
         }
     }
 }

@@ -206,6 +206,7 @@ impl JupyterMessage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn reply_to(
         parent: &JupyterMessage,
         message_id: &str,
