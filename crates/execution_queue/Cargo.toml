@@ -1,0 +1,12 @@
+[package]
+name = "execution_queue"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { workspace = true }
+uuid = { workspace = true }
+chrono = "0.4.43"
+
+kernel = { path = "../kernel" }
+notebook = { path = "../notebook" }
