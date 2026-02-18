@@ -47,6 +47,9 @@ pub enum ClientMessage {
         cell_id: CellId,
         cursor_position: usize,
     },
+    ExecuteCell {
+        cell_id: CellId,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -102,5 +105,14 @@ pub enum ServerMessage {
         user_id: UserId,
         cell_id: CellId,
         cursor_position: usize,
+    },
+    ExecutionPending {
+        cell_id: CellId,
+        user_id: UserId,
+    },
+    CellOutput {
+        cell_id: CellId,
+        execution_count: u32,
+        outputs: Vec<String>,
     },
 }

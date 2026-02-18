@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
+import { KeyCode, KeyMod } from "monaco-editor";
 import type { CellId, CodeCell as CodeCellType } from "../../types/cell";
 import type { User } from "../../types/user";
 import { getUserColorIndex } from "../../utils/userColors";
@@ -10,6 +11,7 @@ interface CodeCellProps {
   cell: CodeCellType;
   onContentChange: (cellId: CellId, content: string) => void;
   onFocusChange: (cellId: CellId, cursorPosition: number) => void;
+  onExecute: (cellId: CellId) => void;
   focusedByUsers: User[];
 }
 
@@ -17,6 +19,7 @@ export const CodeCell = memo(function CodeCell({
   cell,
   onContentChange,
   onFocusChange,
+  onExecute,
   focusedByUsers,
 }: CodeCellProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -48,8 +51,17 @@ export const CodeCell = memo(function CodeCell({
           onFocusChange(cell.id, model.getOffsetAt(pos));
         }
       });
+
+      ed.addAction({
+        id: "execute-cell",
+        label: "Execute Cell",
+        keybindings: [KeyMod.Shift | KeyCode.Enter],
+        run: () => {
+          onExecute(cell.id);
+        },
+      });
     },
-    [cell.id, onFocusChange],
+    [cell.id, onFocusChange, onExecute],
   );
 
   // Update remote cursor decorations when focusedByUsers changes
@@ -93,8 +105,16 @@ export const CodeCell = memo(function CodeCell({
   return (
     <div className="bg-gray-950 rounded-lg overflow-hidden border border-gray-800">
       <div className="flex">
-        <div className="w-24 shrink-0 py-3 px-3 text-right text-gray-500 font-mono text-sm select-none bg-gray-900/50 whitespace-nowrap">
-          In {executionLabel}:
+        <div className="w-24 shrink-0 py-3 px-3 text-right text-gray-500 font-mono text-sm select-none bg-gray-900/50 whitespace-nowrap flex flex-col items-end gap-1">
+          <span>In {executionLabel}:</span>
+          <button
+            onClick={() => onExecute(cell.id)}
+            className="w-6 h-6 rounded bg-gray-700 hover:bg-green-700 text-gray-400 hover:text-white flex items-center justify-center text-xs"
+            aria-label="Run cell"
+            title="Run cell (Shift+Enter)"
+          >
+            &#9654;
+          </button>
         </div>
         <div className="flex-1 min-w-0 border-l border-gray-800">
           <Editor

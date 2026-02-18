@@ -140,6 +140,9 @@ async fn handle_client_message(
             cell_id,
             cursor_position,
         } => handler::user::handle_change_focus(user_id, cell_id, cursor_position, state).await?,
+        ClientMessage::ExecuteCell { cell_id } => {
+            handler::execution::handle_execute(user_id, cell_id, state).await?
+        }
     };
     Ok(())
 }

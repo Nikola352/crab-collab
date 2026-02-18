@@ -1,8 +1,8 @@
 use crate::connection_file::ConnectionFile;
+use crate::error::KernelError;
 use std::path::PathBuf;
 use tokio::process::{Child, Command};
 use uuid::Uuid;
-use crate::error::KernelError;
 
 pub async fn launch() -> Result<(Child, ConnectionFile, PathBuf), KernelError> {
     let connection_file_path =

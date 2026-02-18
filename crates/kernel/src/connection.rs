@@ -109,7 +109,7 @@ impl KernelConnection {
 
         if after_delim.len() < 5 {
             return Err(KernelError::InvalidMessage(
-                "Insufficient frames after delimiter".into()
+                "Insufficient frames after delimiter".into(),
             ));
         }
         let signature = std::str::from_utf8(&after_delim[0])

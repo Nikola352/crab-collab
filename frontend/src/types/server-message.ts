@@ -81,6 +81,19 @@ export interface ChangeFocusMessage {
   cursor_position: number;
 }
 
+export interface ExecutionPendingMessage {
+  type: "execution_pending";
+  cell_id: CellId;
+  user_id: UserId;
+}
+
+export interface CellOutputMessage {
+  type: "cell_output";
+  cell_id: CellId;
+  execution_count: number;
+  outputs: string[];
+}
+
 export type ServerMessage =
   | JoinMessage
   | LeaveMessage
@@ -91,7 +104,9 @@ export type ServerMessage =
   | TextInsertMessage
   | TextDeleteMessage
   | OperationFailedMessage
-  | ChangeFocusMessage;
+  | ChangeFocusMessage
+  | ExecutionPendingMessage
+  | CellOutputMessage;
 
 // Type guards
 export function isJoinMessage(message: ServerMessage): message is JoinMessage {

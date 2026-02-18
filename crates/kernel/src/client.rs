@@ -25,7 +25,6 @@ pub struct JupyterClient {
     connection_file: crate::connection_file::ConnectionFile,
     connection_file_path: PathBuf,
     output_tx: Sender<KernelOutput>,
-    output_rx: Receiver<KernelOutput>,
 }
 
 /// Output from the Jupyter kernel.
@@ -69,7 +68,7 @@ pub enum OutputEvent {
 
 impl JupyterClient {
     /// Launch a new Python kernel and connect to it.
-    pub async fn new() -> Result<Self, KernelError> {
+    pub async fn new() -> Result<(Self, Receiver<KernelOutput>), KernelError> {
         let (child, connection_file, connection_file_path) = launcher::launch().await?;
 
         let connection = KernelConnection::connect(&connection_file).await?;
@@ -82,19 +81,11 @@ impl JupyterClient {
             connection_file,
             connection_file_path,
             output_tx: tx.clone(),
-            output_rx: rx,
         };
 
         tokio::spawn(iopub_listener(Arc::clone(&client.connection), tx));
 
-        Ok(client)
-    }
-
-    /// Get a mutable reference to the output channel.
-    ///
-    /// Use this to receive kernel outputs asynchronously.
-    pub fn output_channel(&mut self) -> &mut Receiver<KernelOutput> {
-        &mut self.output_rx
+        Ok((client, rx))
     }
 
     /// Execute code in a cell.
@@ -231,7 +222,6 @@ mod tests {
     use super::*;
     use tokio::time::{Duration, timeout};
 
-    /// Helper to check if Python and ipykernel are available
     fn is_jupyter_available() -> bool {
         std::process::Command::new("python3")
             .args(["-c", "import ipykernel"])
@@ -249,8 +239,8 @@ mod tests {
             return;
         }
 
-        let client = JupyterClient::new().await;
-        assert!(client.is_ok(), "Failed to launch kernel");
+        let result = JupyterClient::new().await;
+        assert!(result.is_ok(), "Failed to launch kernel");
     }
 
     #[tokio::test]
@@ -260,11 +250,8 @@ mod tests {
             return;
         }
 
-        let client = JupyterClient::new().await.expect("Failed to launch kernel");
-
-        // Give kernel time to start
+        let (client, _rx) = JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
-
         assert!(client.is_alive().await, "Kernel should be alive");
     }
 
@@ -275,9 +262,8 @@ mod tests {
             return;
         }
 
-        let mut client = JupyterClient::new().await.expect("Failed to launch kernel");
-
-        // Give kernel time to start
+        let (mut client, mut output_rx) =
+            JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         let msg_id = client
@@ -285,18 +271,13 @@ mod tests {
             .await
             .expect("Failed to execute code");
 
-        // Should receive output within 5 seconds
-        let output_rx = client.output_channel();
         let result = timeout(Duration::from_secs(5), output_rx.recv()).await;
-
         assert!(result.is_ok(), "Should receive output within timeout");
 
         let output = result.unwrap();
         assert!(output.is_some(), "Should receive some output");
-
-        let kernel_output = output.unwrap();
         assert_eq!(
-            kernel_output.parent_id,
+            output.unwrap().parent_id,
             Some(msg_id),
             "Output should have correct parent_id"
         );
@@ -309,7 +290,8 @@ mod tests {
             return;
         }
 
-        let mut client = JupyterClient::new().await.expect("Failed to launch kernel");
+        let (mut client, mut output_rx) =
+            JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         let msg_id = client
@@ -317,9 +299,6 @@ mod tests {
             .await
             .expect("Failed to execute code");
 
-        let output_rx = client.output_channel();
-
-        // Collect outputs for up to 5 seconds
         let mut outputs = Vec::new();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
 
@@ -328,7 +307,6 @@ mod tests {
                 Ok(Some(output)) => {
                     if output.parent_id.as_deref() == Some(msg_id.as_str()) {
                         outputs.push(output.clone());
-                        // Look for stream output
                         if matches!(output.output, OutputEvent::Stream { .. }) {
                             break;
                         }
@@ -339,15 +317,11 @@ mod tests {
             }
         }
 
-        // Should have received at least one output
         assert!(!outputs.is_empty(), "Should receive at least one output");
-
-        // Check if we got stream output
-        let has_stream = outputs
-            .iter()
-            .any(|o| matches!(o.output, OutputEvent::Stream { .. }));
         assert!(
-            has_stream,
+            outputs
+                .iter()
+                .any(|o| matches!(o.output, OutputEvent::Stream { .. })),
             "Should receive stream output from print statement"
         );
     }
@@ -359,15 +333,14 @@ mod tests {
             return;
         }
 
-        let mut client = JupyterClient::new().await.expect("Failed to launch kernel");
+        let (mut client, mut output_rx) =
+            JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         let msg_id = client
             .execute_code("2 + 2")
             .await
             .expect("Failed to execute code");
-
-        let output_rx = client.output_channel();
 
         let mut outputs = Vec::new();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
@@ -387,10 +360,12 @@ mod tests {
             }
         }
 
-        let has_result = outputs
-            .iter()
-            .any(|o| matches!(o.output, OutputEvent::ExecuteResult { .. }));
-        assert!(has_result, "Should receive execute result for expression");
+        assert!(
+            outputs
+                .iter()
+                .any(|o| matches!(o.output, OutputEvent::ExecuteResult { .. })),
+            "Should receive execute result for expression"
+        );
     }
 
     #[tokio::test]
@@ -400,15 +375,14 @@ mod tests {
             return;
         }
 
-        let mut client = JupyterClient::new().await.expect("Failed to launch kernel");
+        let (mut client, mut output_rx) =
+            JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         let msg_id = client
             .execute_code("1 / 0")
             .await
             .expect("Failed to execute code");
-
-        let output_rx = client.output_channel();
 
         let mut outputs = Vec::new();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
@@ -428,14 +402,12 @@ mod tests {
             }
         }
 
-        let has_error = outputs.iter().any(|o| {
-            if let OutputEvent::Error { ename, .. } = &o.output {
-                ename == "ZeroDivisionError"
-            } else {
-                false
-            }
-        });
-        assert!(has_error, "Should receive error for division by zero");
+        assert!(
+            outputs.iter().any(|o| {
+                matches!(&o.output, OutputEvent::Error { ename, .. } if ename == "ZeroDivisionError")
+            }),
+            "Should receive error for division by zero"
+        );
     }
 
     #[tokio::test]
@@ -445,15 +417,14 @@ mod tests {
             return;
         }
 
-        let mut client = JupyterClient::new().await.expect("Failed to launch kernel");
+        let (mut client, mut output_rx) =
+            JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         client
             .execute_code("import time; time.sleep(0.1)")
             .await
             .expect("Failed to execute code");
-
-        let output_rx = client.output_channel();
 
         let mut statuses = Vec::new();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
@@ -473,7 +444,6 @@ mod tests {
             }
         }
 
-        // Should see kernel go busy then idle
         assert!(statuses.len() >= 2, "Should see multiple status changes");
         assert!(
             statuses.iter().any(|s| matches!(s, KernelState::Busy)),
@@ -492,10 +462,10 @@ mod tests {
             return;
         }
 
-        let mut client = JupyterClient::new().await.expect("Failed to launch kernel");
+        let (mut client, mut output_rx) =
+            JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        // Execute multiple times
         let msg_id1 = client
             .execute_code("x = 1")
             .await
@@ -512,11 +482,9 @@ mod tests {
         assert_ne!(msg_id1, msg_id2, "Message IDs should be unique");
         assert_ne!(msg_id2, msg_id3, "Message IDs should be unique");
 
-        // Should receive outputs for all executions
-        let output_rx = client.output_channel();
         let mut received_ids = std::collections::HashSet::new();
-
         let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+
         while tokio::time::Instant::now() < deadline {
             match timeout(Duration::from_millis(100), output_rx.recv()).await {
                 Ok(Some(output)) => {
@@ -553,51 +521,42 @@ mod tests {
             return;
         }
 
-        let mut client = JupyterClient::new().await.expect("Failed to launch kernel");
+        let (mut client, mut output_rx) =
+            JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        // Set a variable
         client
             .execute_code("test_var = 42")
             .await
             .expect("Failed to execute");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        // Restart kernel
         client.restart().await.expect("Failed to restart");
-
-        // Wait for the new kernel to be ready by checking iopub for status messages
         tokio::time::sleep(Duration::from_secs(2)).await;
 
-        // Drain any stale messages from shutdown/startup
-        {
-            let output_rx = client.output_channel();
-            loop {
-                match timeout(Duration::from_millis(200), output_rx.recv()).await {
-                    Ok(Some(_)) => continue,
-                    _ => break,
-                }
+        // Drain stale messages from shutdown/startup
+        loop {
+            match timeout(Duration::from_millis(200), output_rx.recv()).await {
+                Ok(Some(_)) => continue,
+                _ => break,
             }
         }
 
-        // Variable should be gone after restart
         let msg_id = client
             .execute_code("test_var")
             .await
             .expect("Failed to execute after restart");
 
-        let output_rx = client.output_channel();
         let mut has_name_error = false;
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
         while tokio::time::Instant::now() < deadline {
             match timeout(Duration::from_millis(200), output_rx.recv()).await {
                 Ok(Some(output)) => {
                     if output.parent_id.as_deref() == Some(msg_id.as_str()) {
-                        if let OutputEvent::Error { ename, .. } = &output.output {
-                            if ename == "NameError" {
-                                has_name_error = true;
-                                break;
-                            }
+                        if matches!(&output.output, OutputEvent::Error { ename, .. } if ename == "NameError")
+                        {
+                            has_name_error = true;
+                            break;
                         }
                     }
                 }
@@ -616,57 +575,50 @@ mod tests {
             return;
         }
 
-        let mut client = JupyterClient::new().await.expect("Failed to launch kernel");
+        let (mut client, mut output_rx) =
+            JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        // Start a long-running execution
         let msg_id = client
             .execute_code("import time; time.sleep(30)")
             .await
             .expect("Failed to execute code");
 
         // Wait for kernel to become busy
-        {
-            let output_rx = client.output_channel();
-            let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
-            while tokio::time::Instant::now() < deadline {
-                match timeout(Duration::from_millis(100), output_rx.recv()).await {
-                    Ok(Some(output)) => {
-                        if let OutputEvent::Status {
-                            state: KernelState::Busy,
-                        } = &output.output
-                        {
-                            break;
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
+        while tokio::time::Instant::now() < deadline {
+            match timeout(Duration::from_millis(100), output_rx.recv()).await {
+                Ok(Some(output)) => {
+                    if matches!(
+                        &output.output,
+                        OutputEvent::Status {
+                            state: KernelState::Busy
                         }
+                    ) {
+                        break;
                     }
-                    _ => continue,
                 }
+                _ => continue,
             }
         }
 
-        // Send interrupt
         client.interrupt().await.expect("Failed to interrupt");
 
-        // Should receive a KeyboardInterrupt error
         let mut was_interrupted = false;
-        {
-            let output_rx = client.output_channel();
-            let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
-            while tokio::time::Instant::now() < deadline {
-                match timeout(Duration::from_millis(200), output_rx.recv()).await {
-                    Ok(Some(output)) => {
-                        if output.parent_id.as_deref() == Some(msg_id.as_str()) {
-                            if let OutputEvent::Error { ename, .. } = &output.output {
-                                if ename == "KeyboardInterrupt" {
-                                    was_interrupted = true;
-                                    break;
-                                }
-                            }
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        while tokio::time::Instant::now() < deadline {
+            match timeout(Duration::from_millis(200), output_rx.recv()).await {
+                Ok(Some(output)) => {
+                    if output.parent_id.as_deref() == Some(msg_id.as_str()) {
+                        if matches!(&output.output, OutputEvent::Error { ename, .. } if ename == "KeyboardInterrupt")
+                        {
+                            was_interrupted = true;
+                            break;
                         }
                     }
-                    Ok(None) => break,
-                    Err(_) => continue,
                 }
+                Ok(None) => break,
+                Err(_) => continue,
             }
         }
 
@@ -675,13 +627,11 @@ mod tests {
             "Should receive KeyboardInterrupt after interrupt"
         );
 
-        // Kernel should still be usable after interrupt
         let msg_id = client
             .execute_code("1 + 1")
             .await
             .expect("Failed to execute after interrupt");
 
-        let output_rx = client.output_channel();
         let mut got_result = false;
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
         while tokio::time::Instant::now() < deadline {

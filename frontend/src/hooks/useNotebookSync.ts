@@ -21,6 +21,8 @@ import type {
   TextDeleteMessage,
   OperationFailedMessage,
   ChangeFocusMessage,
+  ExecutionPendingMessage,
+  CellOutputMessage,
 } from "../types/server-message";
 import type {
   DeleteOp,
@@ -50,6 +52,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
   const insertCellStore = useNotebookStore((state) => state.insertCell);
   const removeCellStore = useNotebookStore((state) => state.removeCell);
   const moveCellStore = useNotebookStore((state) => state.moveCell);
+  const updateCellOutput = useNotebookStore((state) => state.updateCellOutput);
   const receiveServerOperation = useNotebookStore(
     (state) => state.receiveServerOperation,
   );
@@ -222,6 +225,24 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     [updateUser],
   );
 
+  const handleExecutionPending = useCallback(
+    (_msg: ExecutionPendingMessage) => {
+      // No-op for MVP — cell just waits for output
+    },
+    [],
+  );
+
+  const handleCellOutput = useCallback(
+    (msg: CellOutputMessage) => {
+      updateCellOutput(
+        msg.cell_id,
+        msg.outputs,
+        msg.execution_count > 0 ? msg.execution_count : null,
+      );
+    },
+    [updateCellOutput],
+  );
+
   // --- Register server message handlers ---
 
   useEffect(() => {
@@ -237,6 +258,10 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
       handleOperationFailed(msg as OperationFailedMessage),
     );
     on("change_focus", (msg) => handleChangeFocus(msg as ChangeFocusMessage));
+    on("execution_pending", (msg) =>
+      handleExecutionPending(msg as ExecutionPendingMessage),
+    );
+    on("cell_output", (msg) => handleCellOutput(msg as CellOutputMessage));
   }, [
     on,
     handleFullState,
@@ -249,6 +274,8 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     handleTextDelete,
     handleOperationFailed,
     handleChangeFocus,
+    handleExecutionPending,
+    handleCellOutput,
   ]);
 
   // --- Local action handlers ---
@@ -338,11 +365,19 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     [moveCellStore, send],
   );
 
+  const handleExecuteCell = useCallback(
+    (cellId: CellId) => {
+      send({ type: "execute_cell", cell_id: cellId });
+    },
+    [send],
+  );
+
   return {
     handleInsertCell,
     handleDeleteCell,
     handleMoveCell,
     handleContentChange,
+    handleExecuteCell,
     sendFocusChange,
   };
 }

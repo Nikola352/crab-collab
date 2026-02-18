@@ -57,6 +57,11 @@ export interface ChangeFocusMessage {
   cursor_position: number;
 }
 
+export interface ExecuteCellMessage {
+  type: "execute_cell";
+  cell_id: CellId;
+}
+
 export type ClientMessage =
   | JoinMessage
   | CellInsertMessage
@@ -64,7 +69,8 @@ export type ClientMessage =
   | CellMoveMessage
   | TextInsertMessage
   | TextDeleteMessage
-  | ChangeFocusMessage;
+  | ChangeFocusMessage
+  | ExecuteCellMessage;
 
 export function isJoinMessage(message: ClientMessage): message is JoinMessage {
   return message.type === "join";

@@ -4,6 +4,7 @@ members = [
     "crates/server",
     "crates/notebook",
     "crates/kernel",
+    "crates/execution_queue",
 ]
 
 [workspace.package]

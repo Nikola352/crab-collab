@@ -17,7 +17,7 @@ import {
   type RequestId,
 } from "../types/operation";
 
-import type { Cell } from "../types/cell";
+import { type Cell, isCodeCell } from "../types/cell";
 
 interface NotebookState {
   version: number;
@@ -53,6 +53,11 @@ interface NotebookState {
     startPosition: number,
     endPosition: number,
   ) => RequestId;
+  updateCellOutput: (
+    cellId: string,
+    outputs: string[],
+    executionNumber: number | null,
+  ) => void;
   receiveServerOperation: (operation: Operation, isOwn: boolean) => void;
 }
 
@@ -158,6 +163,15 @@ export const useNotebookStore = create<NotebookState>()(
       });
       return id;
     },
+
+    updateCellOutput: (cellId, outputs, executionNumber) =>
+      set((state) => {
+        const cell = state.cells[cellId];
+        if (cell && isCodeCell(cell)) {
+          cell.outputs = outputs;
+          cell.execution_number = executionNumber;
+        }
+      }),
 
     receiveServerOperation: (operation, isOwn) =>
       set((state) => {

@@ -20,6 +20,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
     handleDeleteCell,
     handleMoveCell,
     handleContentChange,
+    handleExecuteCell,
     sendFocusChange,
   } = useNotebookSync(send, on, userName);
 
@@ -40,6 +41,7 @@ export function NotebookView({ userName }: NotebookViewProps) {
           onMoveCell={handleMoveCell}
           onContentChange={handleContentChange}
           onFocusChange={sendFocusChange}
+          onExecuteCell={handleExecuteCell}
         />
       </main>
     </div>

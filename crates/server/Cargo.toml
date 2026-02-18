@@ -16,3 +16,5 @@ tracing = "0.1.44"
 tracing-subscriber = "0.3.22"
 
 notebook = { path = "../notebook" }
+execution_queue = { path = "../execution_queue" }
+
