@@ -2,10 +2,11 @@ use crate::connection::KernelConnection;
 use crate::error::KernelError;
 use crate::launcher;
 use crate::message::{
-    DisplayDataContent, ErrorContent, ExecuteRequestContent, ExecuteResultContent, ExecutionStatus,
-    InterruptRequestContent, JupyterMessage, KernelState, MessageContent, OutputData,
-    ShutdownRequestContent, StatusContent, StreamContent, StreamName,
+    DisplayDataContent, ErrorContent, ExecuteRequestContent, ExecuteResultContent,
+    InterruptRequestContent, JupyterMessage, MessageContent, ShutdownRequestContent, StatusContent,
+    StreamContent,
 };
+use crate::model::{ExecutionStatus, KernelState, OutputData, StreamName};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::process::Child;

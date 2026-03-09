@@ -1,3 +1,4 @@
+use crate::model::{ExecutionStatus, KernelState, OutputData, StreamName};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -144,44 +145,6 @@ impl MessageContent {
             _ => Ok(Self::Unknown(serde_json::from_slice(raw)?)),
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OutputData {
-    #[serde(rename = "text/plain")]
-    pub text_plain: Option<String>,
-
-    #[serde(rename = "text/html")]
-    pub text_html: Option<String>,
-
-    #[serde(rename = "image/png")]
-    pub image_png: Option<String>, // Base64 encoded
-
-    #[serde(rename = "application/json")]
-    pub application_json: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ExecutionStatus {
-    Ok,
-    Error,
-    Abort,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum KernelState {
-    Busy,
-    Idle,
-    Starting,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum StreamName {
-    Stdout,
-    Stderr,
 }
 
 lazy_static::lazy_static! {

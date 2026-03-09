@@ -1,6 +1,7 @@
 use crate::error::ExecutionError;
 use crate::types::{Execution, ExecutionOutput, ExecutionResult};
 use kernel::client::{JupyterClient, KernelOutput, OutputEvent};
+use kernel::model::KernelState;
 use notebook::notebook::{Cell, CellId};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -71,7 +72,7 @@ async fn output_receiver(
                 execution_count,
                 data,
             } => {
-                let execution = take_execution_by_parent(&pending_executions, &parent_id).await;
+                let execution = find_execution_by_parent(&pending_executions, &parent_id).await;
                 if let Some(execution) = execution {
                     let text = data.text_plain.unwrap_or_default();
                     let _ = tx
@@ -101,7 +102,7 @@ async fn output_receiver(
                 evalue,
                 traceback,
             } => {
-                let execution = take_execution_by_parent(&pending_executions, &parent_id).await;
+                let execution = find_execution_by_parent(&pending_executions, &parent_id).await;
                 if let Some(execution) = execution {
                     let _ = tx
                         .send(ExecutionResult {
@@ -115,10 +116,10 @@ async fn output_receiver(
                         .await;
                 }
             }
-            OutputEvent::ExecutionFinished { .. } => {
-                // Safety net: remove if still present
-                let mut pending = pending_executions.write().await;
-                pending.retain(|_, exec| exec.message_id != parent_id);
+            OutputEvent::Status { state } => {
+                if let KernelState::Idle = state {
+                    let _ = take_execution_by_parent(&pending_executions, &parent_id).await;
+                }
             }
             _ => {}
         }
