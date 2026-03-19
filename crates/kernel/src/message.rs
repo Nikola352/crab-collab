@@ -47,6 +47,18 @@ pub struct ExecuteRequestContent {
     pub stop_on_error: bool,
 }
 
+impl ExecuteRequestContent {
+    pub fn new(code: String) -> Self {
+        Self {
+            code,
+            silent: false,
+            store_history: true,
+            allow_stdin: false, // TODO: allow stdin
+            stop_on_error: false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecuteReplyContent {
     pub status: ExecutionStatus,

@@ -8,7 +8,8 @@ use tokio::sync::Mutex;
 use zeromq::{Socket, SocketRecv, SocketSend, ZmqMessage};
 
 pub struct KernelConnection {
-    shell: Mutex<zeromq::DealerSocket>,
+    shell_send: Mutex<zeromq::DealerSendHalf>,
+    shell_recv: Mutex<zeromq::DealerRecvHalf>,
     iopub: Mutex<zeromq::SubSocket>,
     control: Mutex<zeromq::DealerSocket>,
     hb: Mutex<zeromq::ReqSocket>,
@@ -21,6 +22,7 @@ impl KernelConnection {
 
         let mut shell = zeromq::DealerSocket::new();
         shell.connect(&connection_file.shell_endpoint()).await?;
+        let (shell_send, shell_recv) = shell.split();
 
         let mut iopub = zeromq::SubSocket::new();
         iopub.connect(&connection_file.iopub_endpoint()).await?;
@@ -35,7 +37,8 @@ impl KernelConnection {
         let signer = MessageSigner::new(&connection_file.key);
 
         Ok(Self {
-            shell: Mutex::new(shell),
+            shell_send: Mutex::new(shell_send),
+            shell_recv: Mutex::new(shell_recv),
             iopub: Mutex::new(iopub),
             control: Mutex::new(control),
             hb: Mutex::new(hb),
@@ -45,9 +48,16 @@ impl KernelConnection {
 
     pub async fn send_shell(&self, msg: JupyterMessage) -> Result<(), KernelError> {
         let frames = self.serialize_message(msg)?; // Vec<Vec<u8>>
-        let mut shell = self.shell.lock().await;
+        let mut shell = self.shell_send.lock().await;
         shell.send(frames).await?;
         Ok(())
+    }
+
+    pub async fn recv_shell(&self) -> Result<JupyterMessage, KernelError> {
+        let mut shell = self.shell_recv.lock().await;
+        let msg = shell.recv().await?;
+        drop(shell);
+        self.deserialize_message(msg)
     }
 
     pub async fn recv_iopub(&self) -> Result<JupyterMessage, KernelError> {

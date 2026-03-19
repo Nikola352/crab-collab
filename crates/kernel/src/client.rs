@@ -2,9 +2,9 @@ use crate::connection::KernelConnection;
 use crate::error::KernelError;
 use crate::launcher;
 use crate::message::{
-    DisplayDataContent, ErrorContent, ExecuteRequestContent, ExecuteResultContent,
-    InterruptRequestContent, JupyterMessage, MessageContent, ShutdownRequestContent, StatusContent,
-    StreamContent,
+    DisplayDataContent, ErrorContent, ExecuteReplyContent, ExecuteRequestContent,
+    ExecuteResultContent, InterruptRequestContent, JupyterMessage, MessageContent,
+    ShutdownRequestContent, StatusContent, StreamContent,
 };
 use crate::model::{ExecutionStatus, KernelState, OutputData, StreamName};
 use std::path::PathBuf;
@@ -84,6 +84,7 @@ impl JupyterClient {
             output_tx: tx.clone(),
         };
 
+        tokio::spawn(shell_listener(Arc::clone(&client.connection), tx.clone()));
         tokio::spawn(iopub_listener(Arc::clone(&client.connection), tx));
 
         Ok((client, rx))
@@ -97,13 +98,7 @@ impl JupyterClient {
             .send_shell(JupyterMessage::new(
                 &id,
                 "execute_request",
-                MessageContent::ExecuteRequest(ExecuteRequestContent {
-                    code: code.to_string(),
-                    silent: false,
-                    store_history: false,
-                    allow_stdin: false,
-                    stop_on_error: false,
-                }),
+                MessageContent::ExecuteRequest(ExecuteRequestContent::new(code.to_owned())),
             ))
             .await?;
         Ok(id)
@@ -170,6 +165,36 @@ impl JupyterClient {
     }
 }
 
+async fn shell_listener(connection: Arc<KernelConnection>, output_tx: Sender<KernelOutput>) {
+    loop {
+        match connection.recv_shell().await {
+            Err(_) => continue,
+            Ok(msg) => {
+                let event: OutputEvent = match msg.content {
+                    MessageContent::ExecuteReply(ExecuteReplyContent {
+                        status,
+                        execution_count,
+                    }) => OutputEvent::ExecutionFinished {
+                        status,
+                        execution_count,
+                    },
+                    // MessageContent::ShutdownReply(_) => {}
+                    // MessageContent::InterruptReply(_) => {}
+                    _ => continue,
+                };
+
+                let _ = output_tx
+                    .send(KernelOutput {
+                        message_id: msg.header.msg_id,
+                        parent_id: msg.parent_header.map(|p| p.msg_id),
+                        output: event,
+                    })
+                    .await;
+            }
+        }
+    }
+}
+
 async fn iopub_listener(connection: Arc<KernelConnection>, output_tx: Sender<KernelOutput>) {
     loop {
         match connection.recv_iopub().await {
@@ -210,7 +235,7 @@ async fn iopub_listener(connection: Arc<KernelConnection>, output_tx: Sender<Ker
                     .send(KernelOutput {
                         message_id: msg.header.msg_id,
                         parent_id: msg.parent_header.map(|p| p.msg_id),
-                        output: event.clone(),
+                        output: event,
                     })
                     .await;
             }
