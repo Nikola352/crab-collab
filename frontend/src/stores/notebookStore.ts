@@ -17,7 +17,7 @@ import {
   type RequestId,
 } from "../types/operation";
 
-import { type Cell, isCodeCell } from "../types/cell";
+import { type Cell, type CellOutput, isCodeCell } from "../types/cell";
 
 interface NotebookState {
   version: number;
@@ -53,11 +53,14 @@ interface NotebookState {
     startPosition: number,
     endPosition: number,
   ) => RequestId;
-  updateCellOutput: (
+  updateCellOutput: (cellId: string, outputs: CellOutput[]) => void;
+  clearCellOutputs: (cellId: string) => void;
+  setCellExecutionState: (
     cellId: string,
-    outputs: string[],
-    executionNumber: number | null,
+    state: "idle" | "pending" | "running" | "finishing",
   ) => void;
+  startCellExecution: (cellId: string) => void;
+  finishCellExecution: (cellId: string, executionCount: number) => void;
   receiveServerOperation: (operation: Operation, isOwn: boolean) => void;
 }
 
@@ -164,12 +167,45 @@ export const useNotebookStore = create<NotebookState>()(
       return id;
     },
 
-    updateCellOutput: (cellId, outputs, executionNumber) =>
+    updateCellOutput: (cellId, outputs) =>
       set((state) => {
         const cell = state.cells[cellId];
         if (cell && isCodeCell(cell)) {
-          cell.outputs = outputs;
-          cell.execution_number = executionNumber;
+          cell.outputs.push(...outputs);
+        }
+      }),
+
+    clearCellOutputs: (cellId) =>
+      set((state) => {
+        const cell = state.cells[cellId];
+        if (cell && isCodeCell(cell)) {
+          cell.outputs = [];
+        }
+      }),
+
+    setCellExecutionState: (cellId, state) =>
+      set((draft) => {
+        const cell = draft.cells[cellId];
+        if (cell && isCodeCell(cell)) {
+          cell.execution_state = state;
+        }
+      }),
+
+    startCellExecution: (cellId) =>
+      set((state) => {
+        const cell = state.cells[cellId];
+        if (cell && isCodeCell(cell)) {
+          cell.outputs = [];
+          cell.execution_state = "running";
+        }
+      }),
+
+    finishCellExecution: (cellId, executionCount) =>
+      set((state) => {
+        const cell = state.cells[cellId];
+        if (cell && isCodeCell(cell)) {
+          cell.execution_number = executionCount;
+          cell.execution_state = "finishing";
         }
       }),
 

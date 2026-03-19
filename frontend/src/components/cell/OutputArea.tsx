@@ -1,9 +1,10 @@
+import type { CellOutput } from "../../types/cell";
+
 interface OutputAreaProps {
-  outputs: string[];
-  executionNumber: number | null;
+  outputs: CellOutput[];
 }
 
-export function OutputArea({ outputs, executionNumber }: OutputAreaProps) {
+export function OutputArea({ outputs }: OutputAreaProps) {
   if (outputs.length === 0) {
     return null;
   }
@@ -13,12 +14,10 @@ export function OutputArea({ outputs, executionNumber }: OutputAreaProps) {
       {outputs.map((output, index) => (
         <div key={index} className="flex">
           <div className="w-24 shrink-0 py-3 px-3 text-right text-gray-500 font-mono text-sm select-none whitespace-nowrap">
-            {index === 0 && executionNumber !== null
-              ? `Out [${executionNumber}]:`
-              : ""}
+            {output.out_number ? `Out [${output.out_number}]:` : ""}
           </div>
           <pre className="flex-1 py-3 px-3 text-gray-300 font-mono text-sm overflow-x-auto whitespace-pre-wrap border-l border-gray-800">
-            {output}
+            {output.text}
           </pre>
         </div>
       ))}

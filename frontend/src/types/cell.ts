@@ -12,10 +12,16 @@ export interface MarkdownCell extends BaseCell {
   cell_type: "markdown";
 }
 
+export interface CellOutput {
+  text: string;
+  out_number: number | null;
+}
+
 export interface CodeCell extends BaseCell {
   cell_type: "code";
-  outputs: string[];
+  outputs: CellOutput[];
   execution_number: number | null;
+  execution_state: "idle" | "pending" | "running" | "finishing";
 }
 
 export type Cell = MarkdownCell | CodeCell;

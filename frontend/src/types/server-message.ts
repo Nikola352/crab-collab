@@ -91,7 +91,24 @@ export interface CellOutputMessage {
   type: "cell_output";
   cell_id: CellId;
   execution_count: number;
-  outputs: string[];
+  text: string;
+}
+
+export interface ExecutionStartedMessage {
+  type: "execution_started";
+  cell_id: CellId;
+}
+
+export interface ExecutionFinishedMessage {
+  type: "execution_finished";
+  cell_id: CellId;
+  status: string;
+  execution_count: number;
+}
+
+export interface CellIdleMessage {
+  type: "cell_idle";
+  cell_id: CellId;
 }
 
 export type ServerMessage =
@@ -106,7 +123,10 @@ export type ServerMessage =
   | OperationFailedMessage
   | ChangeFocusMessage
   | ExecutionPendingMessage
-  | CellOutputMessage;
+  | CellOutputMessage
+  | ExecutionStartedMessage
+  | ExecutionFinishedMessage
+  | CellIdleMessage;
 
 // Type guards
 export function isJoinMessage(message: ServerMessage): message is JoinMessage {

@@ -23,6 +23,9 @@ import type {
   ChangeFocusMessage,
   ExecutionPendingMessage,
   CellOutputMessage,
+  ExecutionStartedMessage,
+  ExecutionFinishedMessage,
+  CellIdleMessage,
 } from "../types/server-message";
 import type {
   DeleteOp,
@@ -32,7 +35,13 @@ import type {
   TextInsertOp,
   TextDeleteOp,
 } from "../types/operation";
-import type { Cell, CellId, CellType } from "../types/cell";
+import {
+  isCodeCell,
+  type Cell,
+  type CellId,
+  type CellType,
+  type CodeCell,
+} from "../types/cell";
 
 type SendFn = (message: ClientMessage) => void;
 type OnFn = (messageType: string, handler: MessageHandler) => void;
@@ -53,6 +62,16 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
   const removeCellStore = useNotebookStore((state) => state.removeCell);
   const moveCellStore = useNotebookStore((state) => state.moveCell);
   const updateCellOutput = useNotebookStore((state) => state.updateCellOutput);
+  const clearCellOutputs = useNotebookStore((state) => state.clearCellOutputs);
+  const setCellExecutionState = useNotebookStore(
+    (state) => state.setCellExecutionState,
+  );
+  const startCellExecution = useNotebookStore(
+    (state) => state.startCellExecution,
+  );
+  const finishCellExecution = useNotebookStore(
+    (state) => state.finishCellExecution,
+  );
   const receiveServerOperation = useNotebookStore(
     (state) => state.receiveServerOperation,
   );
@@ -61,8 +80,19 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
 
   const handleFullState = useCallback(
     (msg: FullStateMessage) => {
+      const cells = msg.notebook.cells.map((cell) => {
+        // TODO: remove this mapping after redesigning the execution state model
+        if (isCodeCell(cell)) {
+          return {
+            ...cell,
+            execution_state: "idle",
+          } as CodeCell;
+        } else {
+          return cell;
+        }
+      });
       setSession(msg.user_id, userName);
-      setCells(msg.notebook.cells);
+      setCells(cells);
       setVersion(msg.version);
       setUsers(msg.users);
       for (const cell of msg.notebook.cells) {
@@ -99,11 +129,14 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
 
   const handleCellInsert = useCallback(
     (msg: CellInsertMessage) => {
+      const cell = isCodeCell(msg.cell)
+        ? ({ ...msg.cell, execution_state: "idle" } as Cell)
+        : msg.cell;
       const operation: InsertOp = {
         id: msg.context.request_id,
         version: msg.context.version,
         type: "insert",
-        cell: msg.cell,
+        cell: cell,
         index: msg.index,
       };
       const isOwn = msg.context.user_id === useSessionStore.getState().userId;
@@ -226,21 +259,44 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
   );
 
   const handleExecutionPending = useCallback(
-    (_msg: ExecutionPendingMessage) => {
-      // No-op for MVP — cell just waits for output
+    (msg: ExecutionPendingMessage) => {
+      setCellExecutionState(msg.cell_id, "pending");
+      clearCellOutputs(msg.cell_id); // TODO: remove after redesigning the execution state model
     },
-    [],
+    [setCellExecutionState, clearCellOutputs],
+  );
+
+  const handleExecutionStarted = useCallback(
+    (msg: ExecutionStartedMessage) => {
+      startCellExecution(msg.cell_id);
+    },
+    [startCellExecution],
   );
 
   const handleCellOutput = useCallback(
     (msg: CellOutputMessage) => {
-      updateCellOutput(
-        msg.cell_id,
-        msg.outputs,
-        msg.execution_count > 0 ? msg.execution_count : null,
-      );
+      updateCellOutput(msg.cell_id, [
+        {
+          text: msg.text,
+          out_number: msg.execution_count > 0 ? msg.execution_count : null,
+        },
+      ]);
     },
     [updateCellOutput],
+  );
+
+  const handleExecutionFinished = useCallback(
+    (msg: ExecutionFinishedMessage) => {
+      finishCellExecution(msg.cell_id, msg.execution_count);
+    },
+    [finishCellExecution],
+  );
+
+  const handleCellIdle = useCallback(
+    (msg: CellIdleMessage) => {
+      setCellExecutionState(msg.cell_id, "idle");
+    },
+    [setCellExecutionState],
   );
 
   // --- Register server message handlers ---
@@ -261,7 +317,14 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     on("execution_pending", (msg) =>
       handleExecutionPending(msg as ExecutionPendingMessage),
     );
+    on("execution_started", (msg) =>
+      handleExecutionStarted(msg as ExecutionStartedMessage),
+    );
     on("cell_output", (msg) => handleCellOutput(msg as CellOutputMessage));
+    on("execution_finished", (msg) =>
+      handleExecutionFinished(msg as ExecutionFinishedMessage),
+    );
+    on("cell_idle", (msg) => handleCellIdle(msg as CellIdleMessage));
   }, [
     on,
     handleFullState,
@@ -275,7 +338,10 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     handleOperationFailed,
     handleChangeFocus,
     handleExecutionPending,
+    handleExecutionStarted,
     handleCellOutput,
+    handleExecutionFinished,
+    handleCellIdle,
   ]);
 
   // --- Local action handlers ---
@@ -298,6 +364,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
               content: "",
               outputs: [],
               execution_number: null,
+              execution_state: "idle",
             }
           : {
               id: cellId,

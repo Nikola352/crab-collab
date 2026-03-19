@@ -40,6 +40,7 @@ __pycache__/
 *$py.class
 .ipynb_checkpoints/
 *.ipynb
+.venv
 
 # Jupyter
 .jupyter/

@@ -97,7 +97,11 @@ export const CodeCell = memo(function CodeCell({
   }, [focusedByUsers]);
 
   const executionLabel =
-    cell.execution_number !== null ? `[${cell.execution_number}]` : "[ ]";
+    cell.execution_state === "running" || cell.execution_state === "pending"
+      ? "[*]"
+      : cell.execution_number !== null
+        ? `[${cell.execution_number}]`
+        : "[ ]";
 
   const lineCount = cell.content.split("\n").length;
   const editorHeight = Math.max(lineCount * 20 + 16, 60);
@@ -109,7 +113,8 @@ export const CodeCell = memo(function CodeCell({
           <span>In {executionLabel}:</span>
           <button
             onClick={() => onExecute(cell.id)}
-            className="w-6 h-6 rounded bg-gray-700 hover:bg-green-700 text-gray-400 hover:text-white flex items-center justify-center text-xs"
+            disabled={cell.execution_state !== "idle"}
+            className="w-6 h-6 rounded bg-gray-700 hover:bg-green-700 text-gray-400 hover:text-white flex items-center justify-center text-xs disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Run cell"
             title="Run cell (Shift+Enter)"
           >
@@ -154,10 +159,7 @@ export const CodeCell = memo(function CodeCell({
           />
         </div>
       </div>
-      <OutputArea
-        outputs={cell.outputs}
-        executionNumber={cell.execution_number}
-      />
+      <OutputArea outputs={cell.outputs} />
     </div>
   );
 });
