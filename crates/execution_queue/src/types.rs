@@ -18,6 +18,7 @@ pub struct ExecutionResult {
 
 #[derive(Debug, Clone)]
 pub enum ExecutionOutput {
+    ExecutionStarted,
     Result {
         execution_count: u32,
         data: String,
@@ -30,4 +31,9 @@ pub enum ExecutionOutput {
         evalue: String,
         traceback: Vec<String>,
     },
+    ExecutionFinished {
+        status: String,
+        execution_count: u32,
+    },
+    CellIdle,
 }

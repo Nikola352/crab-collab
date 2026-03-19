@@ -1,7 +1,7 @@
 use crate::conflict_resolver::state::NotebookStateHolder;
 use crate::error::NotebookError;
 use crate::error::NotebookError::InvalidIndex;
-use crate::notebook::{Cell, CellId, CellKind, Notebook};
+use crate::notebook::{Cell, CellId, CellKind, CellOutput, Notebook};
 use crate::operation::Operation;
 use crate::operation::result::{OperationResult, OperationResultData};
 use tokio::sync::RwLock;
@@ -54,12 +54,26 @@ impl NotebookStateHolder for NaiveStateHolder {
         self.inner.read().await.version
     }
 
-    async fn update_cell_output(
+    async fn append_cell_output(
         &self,
         cell_id: CellId,
-        outputs: Vec<String>,
-        execution_number: Option<u32>,
+        output: CellOutput,
     ) -> Result<(), NotebookError> {
+        let mut state = self.inner.write().await;
+        let cell = state.notebook.get_cell_mut(cell_id)?;
+        match &mut cell.kind {
+            CellKind::Code {
+                outputs: cell_outputs,
+                ..
+            } => {
+                cell_outputs.push(output);
+                Ok(())
+            }
+            _ => Err(NotebookError::CellNotFound(cell_id)),
+        }
+    }
+
+    async fn clear_cell_output(&self, cell_id: CellId) -> Result<(), NotebookError> {
         let mut state = self.inner.write().await;
         let cell = state.notebook.get_cell_mut(cell_id)?;
         match &mut cell.kind {
@@ -67,8 +81,8 @@ impl NotebookStateHolder for NaiveStateHolder {
                 outputs: cell_outputs,
                 execution_number: cell_exec_num,
             } => {
-                *cell_outputs = outputs;
-                *cell_exec_num = execution_number;
+                cell_outputs.clear();
+                *cell_exec_num = None; // TODO: rethink this
                 Ok(())
             }
             _ => Err(NotebookError::CellNotFound(cell_id)),

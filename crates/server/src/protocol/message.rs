@@ -83,6 +83,7 @@ pub enum ServerMessage {
         from_index: usize,
         to_index: usize,
     },
+
     TextInsert {
         context: StateUpdateContext,
         cell_id: CellId,
@@ -101,18 +102,31 @@ pub enum ServerMessage {
         context: StateUpdateContext,
         message: String,
     },
+
     ChangeFocus {
         user_id: UserId,
         cell_id: CellId,
         cursor_position: usize,
     },
+
     ExecutionPending {
         cell_id: CellId,
         user_id: UserId,
     },
+    ExecutionStarted {
+        cell_id: CellId,
+    },
     CellOutput {
         cell_id: CellId,
         execution_count: u32,
-        outputs: Vec<String>,
+        text: String,
+    },
+    ExecutionFinished {
+        cell_id: CellId,
+        status: String,
+        execution_count: u32,
+    },
+    CellIdle {
+        cell_id: CellId,
     },
 }

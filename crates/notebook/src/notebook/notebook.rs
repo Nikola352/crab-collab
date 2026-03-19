@@ -70,7 +70,7 @@ impl Notebook {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::notebook::CellKind;
+    use crate::notebook::{CellKind, CellOutput};
     use uuid::Uuid;
 
     #[test]
@@ -309,8 +309,14 @@ mod tests {
             execution_number,
         } = &mut cell_mut.kind
         {
-            outputs.push("2".to_string());
-            outputs.push("3".to_string());
+            outputs.push(CellOutput {
+                text: "2".to_string(),
+                execution_number: None,
+            });
+            outputs.push(CellOutput {
+                text: "3".to_string(),
+                execution_number: Some(42),
+            });
             *execution_number = Some(42);
         }
 
@@ -322,8 +328,10 @@ mod tests {
         } = &cell_ref.kind
         {
             assert_eq!(outputs.len(), 2);
-            assert_eq!(outputs[0], "2");
-            assert_eq!(outputs[1], "3");
+            assert_eq!(outputs[0].text, "2");
+            assert_eq!(outputs[1].text, "3");
+            assert_eq!(outputs[0].execution_number, None);
+            assert_eq!(outputs[1].execution_number, Some(42));
             assert_eq!(*execution_number, Some(42));
         }
     }

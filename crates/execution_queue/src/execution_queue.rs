@@ -1,7 +1,7 @@
 use crate::error::ExecutionError;
 use crate::types::{Execution, ExecutionOutput, ExecutionResult};
 use kernel::client::{JupyterClient, KernelOutput, OutputEvent};
-use kernel::model::KernelState;
+use kernel::model::{ExecutionStatus, KernelState};
 use notebook::notebook::{Cell, CellId};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -116,9 +116,38 @@ async fn output_receiver(
                         .await;
                 }
             }
+            OutputEvent::ExecutionFinished {
+                execution_count,
+                status,
+            } => {
+                let execution = find_execution_by_parent(&pending_executions, &parent_id).await;
+                if let Some(execution) = execution {
+                    let _ = tx
+                        .send(ExecutionResult {
+                            execution,
+                            output: ExecutionOutput::ExecutionFinished {
+                                status: match status {
+                                    ExecutionStatus::Ok => "ok".to_owned(),
+                                    ExecutionStatus::Error => "error".to_owned(),
+                                    ExecutionStatus::Abort => "abort".to_owned(),
+                                },
+                                execution_count,
+                            },
+                        })
+                        .await;
+                }
+            }
             OutputEvent::Status { state } => {
                 if let KernelState::Idle = state {
-                    let _ = take_execution_by_parent(&pending_executions, &parent_id).await;
+                    let execution = take_execution_by_parent(&pending_executions, &parent_id).await;
+                    if let Some(execution) = execution {
+                        let _ = tx
+                            .send(ExecutionResult {
+                                execution,
+                                output: ExecutionOutput::CellIdle,
+                            })
+                            .await;
+                    }
                 }
             }
             _ => {}

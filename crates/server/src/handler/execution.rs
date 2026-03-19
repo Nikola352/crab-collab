@@ -2,7 +2,7 @@ use crate::protocol::message::ServerMessage;
 use crate::protocol::types::{CellId, UserId};
 use crate::state::AppState;
 use execution_queue::types::{ExecutionOutput, ExecutionResult};
-use notebook::notebook::CellKind;
+use notebook::notebook::{CellKind, CellOutput};
 use std::error::Error;
 
 pub async fn handle_execute(
@@ -50,7 +50,13 @@ pub async fn handle_output(
         } => {
             state
                 .notebook
-                .update_cell_output(cell_id, vec![data.clone()], Some(execution_count))
+                .append_cell_output(
+                    cell_id,
+                    CellOutput {
+                        text: data.clone(),
+                        execution_number: Some(execution_count),
+                    },
+                )
                 .await?;
 
             state
@@ -58,7 +64,7 @@ pub async fn handle_output(
                     ServerMessage::CellOutput {
                         cell_id,
                         execution_count,
-                        outputs: vec![data],
+                        text: data,
                     },
                     None,
                 )
@@ -67,7 +73,13 @@ pub async fn handle_output(
         ExecutionOutput::Stream { text } => {
             state
                 .notebook
-                .update_cell_output(cell_id, vec![text.clone()], None)
+                .append_cell_output(
+                    cell_id,
+                    CellOutput {
+                        text: text.clone(),
+                        execution_number: None,
+                    },
+                )
                 .await?;
 
             state
@@ -75,7 +87,7 @@ pub async fn handle_output(
                     ServerMessage::CellOutput {
                         cell_id,
                         execution_count: 0,
-                        outputs: vec![text],
+                        text,
                     },
                     None,
                 )
@@ -90,7 +102,13 @@ pub async fn handle_output(
 
             state
                 .notebook
-                .update_cell_output(cell_id, vec![error_text.clone()], None)
+                .append_cell_output(
+                    cell_id,
+                    CellOutput {
+                        text: error_text.clone(),
+                        execution_number: None,
+                    },
+                )
                 .await?;
 
             state
@@ -98,10 +116,35 @@ pub async fn handle_output(
                     ServerMessage::CellOutput {
                         cell_id,
                         execution_count: 0,
-                        outputs: vec![error_text],
+                        text: error_text,
                     },
                     None,
                 )
+                .await?;
+        }
+        ExecutionOutput::ExecutionStarted {} => {
+            state
+                .broadcast(ServerMessage::ExecutionStarted { cell_id }, None)
+                .await?;
+        }
+        ExecutionOutput::ExecutionFinished {
+            status,
+            execution_count,
+        } => {
+            state
+                .broadcast(
+                    ServerMessage::ExecutionFinished {
+                        cell_id,
+                        status,
+                        execution_count,
+                    },
+                    None,
+                )
+                .await?;
+        }
+        ExecutionOutput::CellIdle => {
+            state
+                .broadcast(ServerMessage::CellIdle { cell_id }, None)
                 .await?;
         }
     }

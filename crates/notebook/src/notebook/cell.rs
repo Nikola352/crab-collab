@@ -16,9 +16,15 @@ pub struct Cell {
 pub enum CellKind {
     Markdown,
     Code {
-        outputs: Vec<String>,
+        outputs: Vec<CellOutput>,
         execution_number: Option<u32>,
     },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CellOutput {
+    pub text: String,
+    pub execution_number: Option<u32>,
 }
 
 impl Cell {
