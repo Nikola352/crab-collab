@@ -22,4 +22,6 @@ pub trait NotebookStateHolder: Send + Sync {
     ) -> Result<(), NotebookError>;
 
     async fn clear_cell_output(&self, cell_id: CellId) -> Result<(), NotebookError>;
+
+    async fn set_cell_execution_number(&self, cell_id: CellId, execution_number: u32) -> Result<(), NotebookError>;
 }

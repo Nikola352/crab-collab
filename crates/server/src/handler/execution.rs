@@ -134,6 +134,11 @@ pub async fn handle_output(
             execution_count,
         } => {
             state
+                .notebook
+                .set_cell_execution_number(cell_id, execution_count)
+                .await?;
+
+            state
                 .broadcast(
                     ServerMessage::ExecutionFinished {
                         cell_id,

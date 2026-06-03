@@ -82,7 +82,26 @@ impl NotebookStateHolder for NaiveStateHolder {
                 execution_number: cell_exec_num,
             } => {
                 cell_outputs.clear();
-                *cell_exec_num = None; // TODO: rethink this
+                *cell_exec_num = None;
+                Ok(())
+            }
+            _ => Err(NotebookError::CellNotFound(cell_id)),
+        }
+    }
+
+    async fn set_cell_execution_number(
+        &self,
+        cell_id: CellId,
+        execution_number: u32,
+    ) -> Result<(), NotebookError> {
+        let mut state = self.inner.write().await;
+        let cell = state.notebook.get_cell_mut(cell_id)?;
+        match &mut cell.kind {
+            CellKind::Code {
+                execution_number: cell_exec_num,
+                ..
+            } => {
+                *cell_exec_num = Some(execution_number);
                 Ok(())
             }
             _ => Err(NotebookError::CellNotFound(cell_id)),
