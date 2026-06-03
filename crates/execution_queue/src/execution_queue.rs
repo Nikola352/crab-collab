@@ -138,6 +138,17 @@ async fn output_receiver(
                 }
             }
             OutputEvent::Status { state } => {
+                if let KernelState::Busy = state {
+                    let execution = find_execution_by_parent(&pending_executions, &parent_id).await;
+                    if let Some(execution) = execution {
+                        let _ = tx
+                            .send(ExecutionResult {
+                                execution,
+                                output: ExecutionOutput::ExecutionStarted,
+                            })
+                            .await;
+                    }
+                }
                 if let KernelState::Idle = state {
                     let execution = take_execution_by_parent(&pending_executions, &parent_id).await;
                     if let Some(execution) = execution {

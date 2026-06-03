@@ -123,6 +123,8 @@ pub async fn handle_output(
                 .await?;
         }
         ExecutionOutput::ExecutionStarted {} => {
+            state.notebook.clear_cell_output(cell_id).await?;
+
             state
                 .broadcast(ServerMessage::ExecutionStarted { cell_id }, None)
                 .await?;
