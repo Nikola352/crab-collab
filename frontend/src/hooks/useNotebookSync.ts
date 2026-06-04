@@ -41,7 +41,9 @@ import {
   type CellId,
   type CellType,
   type CodeCell,
+  type ExecutionState,
 } from "../types/cell";
+import { toCellState } from "../types/execution";
 
 type SendFn = (message: ClientMessage) => void;
 type OnFn = (messageType: string, handler: MessageHandler) => void;
@@ -80,12 +82,15 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
 
   const handleFullState = useCallback(
     (msg: FullStateMessage) => {
+      const cell_states: Record<CellId, ExecutionState> = {};
+      for (const exec of msg.pending_executions) {
+        cell_states[exec.cell_id] = toCellState(exec.status);
+      }
       const cells = msg.notebook.cells.map((cell) => {
-        // TODO: remove this mapping after redesigning the execution state model
         if (isCodeCell(cell)) {
           return {
             ...cell,
-            execution_state: "idle",
+            execution_state: cell_states[cell.id],
           } as CodeCell;
         } else {
           return cell;
@@ -260,17 +265,17 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
 
   const handleExecutionPending = useCallback(
     (msg: ExecutionPendingMessage) => {
-      setCellExecutionState(msg.cell_id, "pending");
-      clearCellOutputs(msg.cell_id); // TODO: remove after redesigning the execution state model
+      setCellExecutionState(msg.cell_id, "pending");  
     },
-    [setCellExecutionState, clearCellOutputs],
+    [setCellExecutionState],
   );
 
   const handleExecutionStarted = useCallback(
     (msg: ExecutionStartedMessage) => {
       startCellExecution(msg.cell_id);
+      clearCellOutputs(msg.cell_id);
     },
-    [startCellExecution],
+    [startCellExecution, clearCellOutputs],
   );
 
   const handleCellOutput = useCallback(

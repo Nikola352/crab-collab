@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use notebook::notebook::CellId;
+use serde::Serialize;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -8,6 +9,15 @@ pub struct Execution {
     pub cell_id: CellId,
     pub requester_id: Uuid,
     pub timestamp: DateTime<Utc>,
+    pub status: ExecutionStatus,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionStatus {
+    Pending,
+    Executing,
+    Finished,
 }
 
 #[derive(Debug, Clone)]

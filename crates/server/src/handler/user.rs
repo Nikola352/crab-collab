@@ -1,3 +1,4 @@
+use crate::handler::execution::get_pending_executions;
 use crate::protocol::message::ServerMessage;
 use crate::protocol::types::{CellId, UserId};
 use crate::state::AppState;
@@ -28,6 +29,7 @@ pub async fn handle_join(
             .send(ServerMessage::FullState {
                 notebook: state.notebook.get_notebook().await.clone(),
                 version: state.notebook.get_version().await,
+                pending_executions: get_pending_executions(state).await,
                 users: state.users.read().await.values().cloned().collect(),
                 user_id,
             })

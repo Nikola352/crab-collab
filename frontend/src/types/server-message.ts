@@ -1,4 +1,5 @@
 import type { Cell, CellId } from "./cell";
+import type { Execution } from "./execution";
 import type { Notebook } from "./notebook";
 import type { RequestId } from "./operation";
 import type { User, UserId } from "./user";
@@ -20,6 +21,7 @@ export interface FullStateMessage {
   user_id: UserId;
   notebook: Notebook;
   version: number;
+  pending_executions: Execution[];
   users: User[];
 }
 

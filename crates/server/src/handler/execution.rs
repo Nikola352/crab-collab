@@ -1,5 +1,5 @@
 use crate::protocol::message::ServerMessage;
-use crate::protocol::types::{CellId, UserId};
+use crate::protocol::types::{CellId, Execution, UserId};
 use crate::state::AppState;
 use execution_queue::types::{ExecutionOutput, ExecutionResult};
 use notebook::notebook::{CellKind, CellOutput};
@@ -157,4 +157,20 @@ pub async fn handle_output(
     }
 
     Ok(())
+}
+
+pub async fn get_pending_executions(state: &AppState) -> Vec<Execution> {
+    state
+        .execution_queue
+        .lock()
+        .await
+        .get_pending_executions()
+        .await
+        .iter()
+        .map(|e| Execution {
+            cell_id: e.cell_id,
+            user_id: e.requester_id,
+            status: e.status,
+        })
+        .collect()
 }

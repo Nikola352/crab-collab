@@ -1,4 +1,6 @@
 use crate::error::ExecutionError;
+use crate::types;
+use crate::types::ExecutionStatus::{Executing, Finished, Pending};
 use crate::types::{Execution, ExecutionOutput, ExecutionResult};
 use kernel::client::{JupyterClient, KernelOutput, OutputEvent};
 use kernel::model::{ExecutionStatus, KernelState};
@@ -45,6 +47,7 @@ impl ExecutionQueue {
             cell_id: cell.id,
             requester_id,
             timestamp: chrono::Utc::now(),
+            status: Pending,
         };
 
         self.pending_executions
@@ -53,6 +56,15 @@ impl ExecutionQueue {
             .insert(cell.id, execution);
 
         Ok(())
+    }
+
+    pub async fn get_pending_executions(&self) -> Vec<Execution> {
+        self.pending_executions
+            .read()
+            .await
+            .iter()
+            .map(|(_, e)| e.clone())
+            .collect()
     }
 }
 
@@ -141,6 +153,7 @@ async fn output_receiver(
                 if let KernelState::Busy = state {
                     let execution = find_execution_by_parent(&pending_executions, &parent_id).await;
                     if let Some(execution) = execution {
+                        update_status(&pending_executions, &execution, Executing).await;
                         let _ = tx
                             .send(ExecutionResult {
                                 execution,
@@ -152,6 +165,7 @@ async fn output_receiver(
                 if let KernelState::Idle = state {
                     let execution = take_execution_by_parent(&pending_executions, &parent_id).await;
                     if let Some(execution) = execution {
+                        update_status(&pending_executions, &execution, Finished).await;
                         let _ = tx
                             .send(ExecutionResult {
                                 execution,
@@ -187,4 +201,25 @@ async fn take_execution_by_parent(
         .find(|(_, exec)| exec.message_id == parent_id)
         .map(|(id, _)| *id);
     cell_id.and_then(|id| map.remove(&id))
+}
+
+async fn update_execution_by_cell_id<F>(
+    pending: &Arc<RwLock<HashMap<CellId, Execution>>>,
+    cell_id: CellId,
+    f: F,
+) where
+    F: FnOnce(&mut Execution),
+{
+    let mut map = pending.write().await;
+    if let Some(exec) = map.get_mut(&cell_id) {
+        f(exec);
+    }
+}
+
+async fn update_status(
+    pending: &Arc<RwLock<HashMap<CellId, Execution>>>,
+    execution: &Execution,
+    status: types::ExecutionStatus,
+) {
+    update_execution_by_cell_id(pending, execution.cell_id, |e| e.status = status).await;
 }

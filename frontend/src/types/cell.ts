@@ -17,11 +17,13 @@ export interface CellOutput {
   out_number: number | null;
 }
 
+export type ExecutionState = "idle" | "pending" | "running" | "finishing";
+
 export interface CodeCell extends BaseCell {
   cell_type: "code";
   outputs: CellOutput[];
   execution_number: number | null;
-  execution_state: "idle" | "pending" | "running" | "finishing";
+  execution_state: ExecutionState;
 }
 
 export type Cell = MarkdownCell | CodeCell;

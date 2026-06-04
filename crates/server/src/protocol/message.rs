@@ -1,4 +1,4 @@
-use crate::protocol::types::{CellId, OperationContext, StateUpdateContext, User, UserId};
+use crate::protocol::types::{CellId, Execution, OperationContext, StateUpdateContext, User, UserId};
 use notebook::notebook::{Cell, Notebook};
 use serde::{Deserialize, Serialize};
 
@@ -65,6 +65,7 @@ pub enum ServerMessage {
     FullState {
         notebook: Notebook,
         version: u64,
+        pending_executions: Vec<Execution>,
         users: Vec<User>,
         user_id: UserId,
     },

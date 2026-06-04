@@ -6,6 +6,8 @@ edition.workspace = true
 [dependencies]
 tokio = { workspace = true }
 uuid = { workspace = true }
+serde = { workspace = true }
+
 chrono = "0.4.43"
 
 kernel = { path = "../kernel" }

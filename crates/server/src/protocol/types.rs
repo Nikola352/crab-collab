@@ -1,4 +1,5 @@
 use crate::protocol::message::ServerMessage;
+use execution_queue::types::ExecutionStatus;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 use uuid::Uuid;
@@ -53,4 +54,11 @@ impl User {
             tx_channel,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Execution {
+    pub cell_id: CellId,
+    pub user_id: UserId,
+    pub status: ExecutionStatus,
 }
