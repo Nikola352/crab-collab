@@ -92,7 +92,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
         if (isCodeCell(cell)) {
           return {
             ...cell,
-            execution_state: cell_states[cell.id],
+            execution_state: cell_states[cell.id] ?? "idle",
           } as CodeCell;
         } else {
           return cell;
