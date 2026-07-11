@@ -1,23 +1,26 @@
 use crate::handler;
 use crate::protocol::message::{CellType, ServerMessage};
-use crate::protocol::types::{CellId, OperationContext, StateUpdateContext, UserId};
+use crate::protocol::types::{
+    CellId, NotebookOperationContext, NotebookStateUpdateContext, TextOperationContext,
+    TextStateUpdateContext, UserId,
+};
 use crate::state::AppState;
 use notebook::error::NotebookError;
 use notebook::notebook::Cell;
-use notebook::operation::Operation;
-use notebook::operation::result::OperationResultData;
+use notebook::operation::result::{NotebookOperationResultData, TextOperationResultData};
+use notebook::operation::{NotebookOperation, TextOperation};
 use std::error::Error;
 
 pub async fn handle_insert_cell(
     user_id: UserId,
-    context: OperationContext,
+    context: NotebookOperationContext,
     index: usize,
     cell_id: CellId,
     cell_type: CellType,
     content: Option<String>,
     state: &AppState,
 ) -> Result<(), Box<dyn Error>> {
-    let operation = Operation::InsertCell {
+    let operation = NotebookOperation::InsertCell {
         index,
         cell: match cell_type {
             CellType::Markdown => {
@@ -29,12 +32,12 @@ pub async fn handle_insert_cell(
 
     let result = state
         .notebook
-        .apply_operation(operation, context.base_version)
+        .apply_cell_operation(operation, context.base_version)
         .await;
 
     match result {
         Ok(result) => {
-            if let OperationResultData::InsertCell {
+            if let NotebookOperationResultData::InsertCell {
                 position: index,
                 cell,
             } = result.data
@@ -63,20 +66,20 @@ pub async fn handle_insert_cell(
 
 pub async fn handle_delete_cell(
     user_id: UserId,
-    context: OperationContext,
+    context: NotebookOperationContext,
     cell_id: CellId,
     state: &AppState,
 ) -> Result<(), Box<dyn Error>> {
-    let operation = Operation::DeleteCell { cell_id };
+    let operation = NotebookOperation::DeleteCell { cell_id };
 
     let result = state
         .notebook
-        .apply_operation(operation, context.base_version)
+        .apply_cell_operation(operation, context.base_version)
         .await;
 
     match result {
         Ok(result) => {
-            if let OperationResultData::DeleteCell { cell_id, .. } = result.data {
+            if let NotebookOperationResultData::DeleteCell { cell_id, .. } = result.data {
                 handler::user::clear_focus_for_cell(cell_id, &state).await;
 
                 state
@@ -100,21 +103,21 @@ pub async fn handle_delete_cell(
 
 pub async fn handle_move_cell(
     user_id: UserId,
-    context: OperationContext,
+    context: NotebookOperationContext,
     cell_id: CellId,
     to_index: usize,
     state: &AppState,
 ) -> Result<(), Box<dyn Error>> {
-    let operation = Operation::MoveCell { cell_id, to_index };
+    let operation = NotebookOperation::MoveCell { cell_id, to_index };
 
     let result = state
         .notebook
-        .apply_operation(operation, context.base_version)
+        .apply_cell_operation(operation, context.base_version)
         .await;
 
     match result {
         Ok(result) => {
-            if let OperationResultData::MoveCell {
+            if let NotebookOperationResultData::MoveCell {
                 cell_id,
                 from_index,
                 to_index,
@@ -143,26 +146,25 @@ pub async fn handle_move_cell(
 
 pub async fn handle_text_insert(
     user_id: UserId,
-    context: OperationContext,
+    context: TextOperationContext,
     cell_id: CellId,
     start_position: usize,
     text: String,
     state: &AppState,
 ) -> Result<(), Box<dyn Error>> {
-    let operation = Operation::TextInsert {
-        cell_id,
+    let operation = TextOperation::TextInsert {
         start_position,
         text,
     };
 
     let result = state
         .notebook
-        .apply_operation(operation, context.base_version)
+        .apply_text_operation(operation, cell_id, context.base_cell_version)
         .await;
 
     match result {
         Ok(result) => {
-            if let OperationResultData::TextInsert {
+            if let TextOperationResultData::TextInsert {
                 cell_id,
                 start_position,
                 end_position,
@@ -174,7 +176,7 @@ pub async fn handle_text_insert(
                 state
                     .broadcast(
                         ServerMessage::TextInsert {
-                            context: create_output_context(result.version, user_id, &context),
+                            context: create_text_output_context(result.version, user_id, &context),
                             cell_id,
                             start_position,
                             end_position,
@@ -187,7 +189,7 @@ pub async fn handle_text_insert(
                 tracing::error!("Operation produced incorrect result type. Result: {result:?}");
             }
         }
-        Err(err) => send_error_message(user_id, &context, state, err).await?,
+        Err(err) => send_text_error_message(user_id, &context, cell_id, state, err).await?,
     }
 
     Ok(())
@@ -195,26 +197,25 @@ pub async fn handle_text_insert(
 
 pub async fn handle_text_delete(
     user_id: UserId,
-    context: OperationContext,
+    context: TextOperationContext,
     cell_id: CellId,
     start_position: usize,
     end_position: usize,
     state: &AppState,
 ) -> Result<(), Box<dyn Error>> {
-    let operation = Operation::TextDelete {
-        cell_id,
+    let operation = TextOperation::TextDelete {
         start_position,
         end_position,
     };
 
     let result = state
         .notebook
-        .apply_operation(operation, context.base_version)
+        .apply_text_operation(operation, cell_id, context.base_cell_version)
         .await;
 
     match result {
         Ok(result) => {
-            if let OperationResultData::TextDelete {
+            if let TextOperationResultData::TextDelete {
                 cell_id,
                 start_position,
                 end_position,
@@ -225,7 +226,7 @@ pub async fn handle_text_delete(
                 state
                     .broadcast(
                         ServerMessage::TextDelete {
-                            context: create_output_context(result.version, user_id, &context),
+                            context: create_text_output_context(result.version, user_id, &context),
                             cell_id,
                             start_position,
                             end_position,
@@ -237,7 +238,7 @@ pub async fn handle_text_delete(
                 tracing::error!("Operation produced incorrect result type. Result: {result:?}");
             }
         }
-        Err(err) => send_error_message(user_id, &context, state, err).await?,
+        Err(err) => send_text_error_message(user_id, &context, cell_id, state, err).await?,
     }
 
     Ok(())
@@ -246,10 +247,22 @@ pub async fn handle_text_delete(
 fn create_output_context(
     version: u64,
     user_id: UserId,
-    context: &OperationContext,
-) -> StateUpdateContext {
-    StateUpdateContext {
+    context: &NotebookOperationContext,
+) -> NotebookStateUpdateContext {
+    NotebookStateUpdateContext {
         version,
+        user_id,
+        request_id: context.request_id,
+    }
+}
+
+fn create_text_output_context(
+    cell_version: u64,
+    user_id: UserId,
+    context: &TextOperationContext,
+) -> TextStateUpdateContext {
+    TextStateUpdateContext {
+        cell_version,
         user_id,
         request_id: context.request_id,
     }
@@ -257,15 +270,37 @@ fn create_output_context(
 
 async fn send_error_message(
     user_id: UserId,
-    context: &OperationContext,
+    context: &NotebookOperationContext,
     state: &AppState,
     err: NotebookError,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(user) = state.users.read().await.get(&user_id) {
         user.tx_channel
             .send(ServerMessage::OperationFailed {
-                context: StateUpdateContext {
+                context: NotebookStateUpdateContext {
                     version: state.notebook.get_version().await,
+                    user_id,
+                    request_id: context.request_id,
+                },
+                message: err.to_string(),
+            })
+            .await?;
+    }
+    Ok(())
+}
+
+async fn send_text_error_message(
+    user_id: UserId,
+    context: &TextOperationContext,
+    cell_id: CellId,
+    state: &AppState,
+    err: NotebookError,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(user) = state.users.read().await.get(&user_id) {
+        user.tx_channel
+            .send(ServerMessage::TextOperationFailed {
+                context: TextStateUpdateContext {
+                    cell_version: state.notebook.get_cell_version(cell_id).await,
                     user_id,
                     request_id: context.request_id,
                 },

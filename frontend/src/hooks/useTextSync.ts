@@ -71,7 +71,9 @@ export function useTextSync(send: SendFn) {
           send({
             type: "text_delete",
             context: {
-              base_version: useNotebookStore.getState().version,
+              base_cell_version: useNotebookStore
+                .getState()
+                .getCellVersion(cellId),
               request_id: requestId,
             },
             cell_id: cellId,
@@ -89,7 +91,9 @@ export function useTextSync(send: SendFn) {
           send({
             type: "text_insert",
             context: {
-              base_version: useNotebookStore.getState().version,
+              base_cell_version: useNotebookStore
+                .getState()
+                .getCellVersion(cellId),
               request_id: requestId,
             },
             cell_id: cellId,

@@ -20,6 +20,7 @@ import type {
   TextInsertMessage,
   TextDeleteMessage,
   OperationFailedMessage,
+  TextOperationFailedMessage,
   ChangeFocusMessage,
   ExecutionPendingMessage,
   CellOutputMessage,
@@ -55,6 +56,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
   const setSession = useSessionStore((state) => state.setSession);
   const setCells = useNotebookStore((state) => state.setCells);
   const setVersion = useNotebookStore((state) => state.setVersion);
+  const setCellVersions = useNotebookStore((state) => state.setCellVersions);
   const setUsers = useUserStore((state) => state.setUsers);
   const addUser = useUserStore((state) => state.addUser);
   const removeUser = useUserStore((state) => state.removeUser);
@@ -99,12 +101,23 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
       setSession(msg.user_id, userName);
       setCells(cells);
       setVersion(msg.version);
+      if (msg.cell_versions) {
+        setCellVersions(msg.cell_versions);
+      }
       setUsers(msg.users);
       for (const cell of msg.notebook.cells) {
         textSync.initCell(cell.id, cell.content);
       }
     },
-    [setSession, setCells, setUsers, setVersion, userName, textSync],
+    [
+      setSession,
+      setCells,
+      setUsers,
+      setVersion,
+      setCellVersions,
+      userName,
+      textSync,
+    ],
   );
 
   const handleJoin = useCallback(
@@ -201,11 +214,26 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     [receiveServerOperation],
   );
 
+  const handleTextOperationFailed = useCallback(
+    (msg: TextOperationFailedMessage) => {
+      console.log("Text operation failed: ", msg);
+      receiveServerOperation(
+        {
+          id: msg.context.request_id,
+          version: msg.context.cell_version,
+          type: "noop",
+        } as NoOp,
+        true,
+      );
+    },
+    [receiveServerOperation],
+  );
+
   const handleTextInsert = useCallback(
     (msg: TextInsertMessage) => {
       const operation: TextInsertOp = {
         id: msg.context.request_id,
-        version: msg.context.version,
+        version: msg.context.cell_version,
         type: "text_insert",
         cell_id: msg.cell_id,
         start_position: msg.start_position,
@@ -231,7 +259,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     (msg: TextDeleteMessage) => {
       const operation: TextDeleteOp = {
         id: msg.context.request_id,
-        version: msg.context.version,
+        version: msg.context.cell_version,
         type: "text_delete",
         cell_id: msg.cell_id,
         start_position: msg.start_position,
@@ -318,6 +346,9 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     on("operation_failed", (msg) =>
       handleOperationFailed(msg as OperationFailedMessage),
     );
+    on("text_operation_failed", (msg) =>
+      handleTextOperationFailed(msg as TextOperationFailedMessage),
+    );
     on("change_focus", (msg) => handleChangeFocus(msg as ChangeFocusMessage));
     on("execution_pending", (msg) =>
       handleExecutionPending(msg as ExecutionPendingMessage),
@@ -341,6 +372,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     handleTextInsert,
     handleTextDelete,
     handleOperationFailed,
+    handleTextOperationFailed,
     handleChangeFocus,
     handleExecutionPending,
     handleExecutionStarted,
@@ -387,7 +419,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
           request_id: requestId,
         },
         index,
-        cell_id: uuidv4() as CellId,
+        cell_id: cellId,
         cell_type: cellType,
       });
 

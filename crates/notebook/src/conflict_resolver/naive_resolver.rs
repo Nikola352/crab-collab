@@ -2,8 +2,12 @@ use crate::conflict_resolver::state::NotebookStateHolder;
 use crate::error::NotebookError;
 use crate::error::NotebookError::InvalidIndex;
 use crate::notebook::{Cell, CellId, CellKind, CellOutput, Notebook};
-use crate::operation::Operation;
-use crate::operation::result::{OperationResult, OperationResultData};
+use crate::operation::result::{
+    NotebookOperationResult, NotebookOperationResultData, TextOperationResult,
+    TextOperationResultData,
+};
+use crate::operation::{NotebookOperation, TextOperation};
+use std::collections::HashMap;
 use tokio::sync::RwLock;
 
 pub struct NaiveStateHolder {
@@ -11,35 +15,29 @@ pub struct NaiveStateHolder {
 }
 
 struct State {
-    version: u64,
     notebook: Notebook,
-    operation_history: Vec<OperationResult>,
+    version: u64,
+    cell_versions: HashMap<CellId, u64>,
+    operation_history: Vec<NotebookOperationResult>,
+    text_operation_history: HashMap<CellId, Vec<TextOperationResult>>,
 }
 
 #[async_trait::async_trait]
 impl NotebookStateHolder for NaiveStateHolder {
-    async fn apply_operation(
+    async fn apply_cell_operation(
         &self,
-        operation: Operation,
+        operation: NotebookOperation,
         base_version: u64,
-    ) -> Result<OperationResult, NotebookError> {
+    ) -> Result<NotebookOperationResult, NotebookError> {
         let mut state = self.inner.write().await;
         let result = match operation {
-            Operation::InsertCell { index, cell } => state.apply_insert(index, cell, base_version),
-            Operation::DeleteCell { cell_id } => state.apply_delete(cell_id),
-            Operation::MoveCell { cell_id, to_index } => {
+            NotebookOperation::InsertCell { index, cell } => {
+                state.apply_insert(index, cell, base_version)
+            }
+            NotebookOperation::DeleteCell { cell_id } => state.apply_delete(cell_id),
+            NotebookOperation::MoveCell { cell_id, to_index } => {
                 state.apply_move(cell_id, to_index, base_version)
             }
-            Operation::TextInsert {
-                cell_id,
-                start_position,
-                text,
-            } => state.apply_text_insert(cell_id, start_position, text),
-            Operation::TextDelete {
-                cell_id,
-                start_position,
-                end_position,
-            } => state.apply_text_delete(cell_id, start_position, end_position),
         }?;
         state.version += 1;
         state.operation_history.push(result.clone());
@@ -52,6 +50,45 @@ impl NotebookStateHolder for NaiveStateHolder {
 
     async fn get_version(&self) -> u64 {
         self.inner.read().await.version
+    }
+
+    async fn apply_text_operation(
+        &self,
+        operation: TextOperation,
+        cell_id: CellId,
+        base_cell_version: u64,
+    ) -> Result<TextOperationResult, NotebookError> {
+        let mut state = self.inner.write().await;
+        let result = match operation {
+            TextOperation::TextInsert {
+                start_position,
+                text,
+            } => state.apply_text_insert(cell_id, base_cell_version, start_position, text),
+            TextOperation::TextDelete {
+                start_position,
+                end_position,
+            } => state.apply_text_delete(cell_id, base_cell_version, start_position, end_position),
+        }?;
+        *state.cell_versions.entry(cell_id).or_insert(0) += 1;
+        state
+            .text_operation_history
+            .entry(cell_id)
+            .or_insert(Vec::new())
+            .push(result.clone());
+        Ok(result)
+    }
+
+    async fn get_cell_version(&self, cell_id: CellId) -> u64 {
+        let state = self.inner.read().await;
+        match state.cell_versions.get(&cell_id) {
+            Some(v) => *v,
+            None => 0,
+        }
+    }
+
+    async fn get_cell_versions(&self) -> HashMap<CellId, u64> {
+        let state = self.inner.read().await;
+        state.cell_versions.clone()
     }
 
     async fn append_cell_output(
@@ -113,9 +150,11 @@ impl NaiveStateHolder {
     pub fn new() -> Self {
         Self {
             inner: RwLock::new(State {
-                version: 0,
                 notebook: Notebook::new(),
+                version: 0,
+                cell_versions: HashMap::new(),
                 operation_history: Vec::new(),
+                text_operation_history: HashMap::new(),
             }),
         }
     }
@@ -126,7 +165,7 @@ impl State {
         let ops = &self.operation_history[base_version as usize..self.version as usize];
         for op in ops {
             match op.data {
-                OperationResultData::InsertCell {
+                NotebookOperationResultData::InsertCell {
                     position: insert_idx,
                     ..
                 } => {
@@ -134,12 +173,12 @@ impl State {
                         index += 1;
                     }
                 }
-                OperationResultData::DeleteCell { from_index, .. } => {
+                NotebookOperationResultData::DeleteCell { from_index, .. } => {
                     if from_index < index {
                         index -= 1;
                     }
                 }
-                OperationResultData::MoveCell {
+                NotebookOperationResultData::MoveCell {
                     from_index,
                     to_index,
                     ..
@@ -151,7 +190,6 @@ impl State {
                         index += 1;
                     }
                 }
-                _ => {}
             }
         }
         index
@@ -162,7 +200,7 @@ impl State {
         index: usize,
         cell: Cell,
         base_version: u64,
-    ) -> Result<OperationResult, NotebookError> {
+    ) -> Result<NotebookOperationResult, NotebookError> {
         let real_index = self.transform_index(index, base_version);
 
         if real_index > self.notebook.cells().len() {
@@ -171,16 +209,16 @@ impl State {
 
         self.notebook.insert_cell(cell.clone(), real_index)?;
 
-        Ok(OperationResult {
+        Ok(NotebookOperationResult {
             version: self.version + 1,
-            data: OperationResultData::InsertCell {
+            data: NotebookOperationResultData::InsertCell {
                 position: real_index,
                 cell,
             },
         })
     }
 
-    fn apply_delete(&mut self, cell_id: CellId) -> Result<OperationResult, NotebookError> {
+    fn apply_delete(&mut self, cell_id: CellId) -> Result<NotebookOperationResult, NotebookError> {
         let from_index = self
             .notebook
             .cells()
@@ -190,9 +228,9 @@ impl State {
 
         self.notebook.delete_cell(cell_id)?;
 
-        Ok(OperationResult {
+        Ok(NotebookOperationResult {
             version: self.version + 1,
-            data: OperationResultData::DeleteCell {
+            data: NotebookOperationResultData::DeleteCell {
                 cell_id,
                 from_index,
             },
@@ -204,13 +242,13 @@ impl State {
         cell_id: CellId,
         to_index: usize,
         base_version: u64,
-    ) -> Result<OperationResult, NotebookError> {
+    ) -> Result<NotebookOperationResult, NotebookError> {
         let real_to_index = self.transform_index(to_index, base_version);
         let (from_index, actual_to_index) = self.notebook.move_cell(cell_id, real_to_index)?;
 
-        Ok(OperationResult {
+        Ok(NotebookOperationResult {
             version: self.version + 1,
-            data: OperationResultData::MoveCell {
+            data: NotebookOperationResultData::MoveCell {
                 cell_id,
                 from_index,
                 to_index: actual_to_index,
@@ -221,17 +259,18 @@ impl State {
     fn apply_text_insert(
         &mut self,
         cell_id: CellId,
+        base_cell_version: u64,
         start_position: usize,
         text: String,
-    ) -> Result<OperationResult, NotebookError> {
+    ) -> Result<TextOperationResult, NotebookError> {
         let cell = self.notebook.get_cell_mut(cell_id)?;
         let clamped_start = start_position.min(cell.content.len());
         cell.content.insert_str(clamped_start, &text);
         let end_position = clamped_start + text.len();
 
-        Ok(OperationResult {
+        Ok(TextOperationResult {
             version: self.version + 1,
-            data: OperationResultData::TextInsert {
+            data: TextOperationResultData::TextInsert {
                 cell_id,
                 start_position: clamped_start,
                 end_position,
@@ -243,18 +282,19 @@ impl State {
     fn apply_text_delete(
         &mut self,
         cell_id: CellId,
+        base_cell_version: u64,
         start_position: usize,
         end_position: usize,
-    ) -> Result<OperationResult, NotebookError> {
+    ) -> Result<TextOperationResult, NotebookError> {
         let cell = self.notebook.get_cell_mut(cell_id)?;
         let len = cell.content.len();
         let clamped_start = start_position.min(len);
         let clamped_end = end_position.min(len);
         cell.content.drain(clamped_start..clamped_end);
 
-        Ok(OperationResult {
+        Ok(TextOperationResult {
             version: self.version + 1,
-            data: OperationResultData::TextDelete {
+            data: TextOperationResultData::TextDelete {
                 cell_id,
                 start_position: clamped_start,
                 end_position: clamped_end,

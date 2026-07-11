@@ -8,14 +8,19 @@ export interface JoinMessage {
 }
 
 // Notebook messages
-export interface OperationContext {
+export interface NotebookOperationContext {
   base_version: number;
+  request_id: RequestId;
+}
+
+export interface TextOperationContext {
+  base_cell_version: number;
   request_id: RequestId;
 }
 
 export interface CellInsertMessage {
   type: "cell_insert";
-  context: OperationContext;
+  context: NotebookOperationContext;
   index: number;
   cell_id: CellId;
   cell_type: "code" | "markdown";
@@ -24,20 +29,20 @@ export interface CellInsertMessage {
 
 export interface CellDeleteMessage {
   type: "cell_delete";
-  context: OperationContext;
+  context: NotebookOperationContext;
   cell_id: CellId;
 }
 
 export interface CellMoveMessage {
   type: "cell_move";
-  context: OperationContext;
+  context: NotebookOperationContext;
   cell_id: CellId;
   to_index: number;
 }
 
 export interface TextInsertMessage {
   type: "text_insert";
-  context: OperationContext;
+  context: TextOperationContext;
   cell_id: CellId;
   start_position: number;
   text: string;
@@ -45,7 +50,7 @@ export interface TextInsertMessage {
 
 export interface TextDeleteMessage {
   type: "text_delete";
-  context: OperationContext;
+  context: TextOperationContext;
   cell_id: CellId;
   start_position: number;
   end_position: number;

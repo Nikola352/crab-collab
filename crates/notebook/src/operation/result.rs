@@ -1,13 +1,13 @@
 use crate::notebook::{Cell, CellId};
 
 #[derive(Debug, Clone)]
-pub struct OperationResult {
+pub struct NotebookOperationResult {
     pub version: u64,
-    pub data: OperationResultData,
+    pub data: NotebookOperationResultData,
 }
 
 #[derive(Debug, Clone)]
-pub enum OperationResultData {
+pub enum NotebookOperationResultData {
     InsertCell {
         position: usize,
         cell: Cell,
@@ -21,6 +21,16 @@ pub enum OperationResultData {
         from_index: usize,
         to_index: usize,
     },
+}
+
+#[derive(Debug, Clone)]
+pub struct TextOperationResult {
+    pub version: u64,
+    pub data: TextOperationResultData,
+}
+
+#[derive(Debug, Clone)]
+pub enum TextOperationResultData {
     TextInsert {
         cell_id: CellId,
         start_position: usize,

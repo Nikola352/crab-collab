@@ -21,33 +21,40 @@ export interface FullStateMessage {
   user_id: UserId;
   notebook: Notebook;
   version: number;
+  cell_versions: Record<string, number>;
   pending_executions: Execution[];
   users: User[];
 }
 
 // Notebook messages
-export interface StateUpdateContext {
+export interface NotebookStateUpdateContext {
   version: number;
+  user_id: UserId;
+  request_id: RequestId;
+}
+
+export interface TextStateUpdateContext {
+  cell_version: number;
   user_id: UserId;
   request_id: RequestId;
 }
 
 export interface CellInsertMessage {
   type: "cell_insert";
-  context: StateUpdateContext;
+  context: NotebookStateUpdateContext;
   index: number;
   cell: Cell;
 }
 
 export interface CellDeleteMessage {
   type: "cell_delete";
-  context: StateUpdateContext;
+  context: NotebookStateUpdateContext;
   cell_id: CellId;
 }
 
 export interface CellMoveMessage {
   type: "cell_move";
-  context: StateUpdateContext;
+  context: NotebookStateUpdateContext;
   cell_id: CellId;
   from_index: number;
   to_index: number;
@@ -55,7 +62,7 @@ export interface CellMoveMessage {
 
 export interface TextInsertMessage {
   type: "text_insert";
-  context: StateUpdateContext;
+  context: TextStateUpdateContext;
   cell_id: CellId;
   start_position: number;
   end_position: number;
@@ -64,7 +71,7 @@ export interface TextInsertMessage {
 
 export interface TextDeleteMessage {
   type: "text_delete";
-  context: StateUpdateContext;
+  context: TextStateUpdateContext;
   cell_id: CellId;
   start_position: number;
   end_position: number;
@@ -72,7 +79,13 @@ export interface TextDeleteMessage {
 
 export interface OperationFailedMessage {
   type: "operation_failed";
-  context: StateUpdateContext;
+  context: NotebookStateUpdateContext;
+  message: string;
+}
+
+export interface TextOperationFailedMessage {
+  type: "text_operation_failed";
+  context: TextStateUpdateContext;
   message: string;
 }
 
@@ -123,6 +136,7 @@ export type ServerMessage =
   | TextInsertMessage
   | TextDeleteMessage
   | OperationFailedMessage
+  | TextOperationFailedMessage
   | ChangeFocusMessage
   | ExecutionPendingMessage
   | CellOutputMessage
@@ -181,4 +195,10 @@ export function isChangeFocusMessage(
   message: ServerMessage,
 ): message is ChangeFocusMessage {
   return message.type === "change_focus";
+}
+
+export function isTextOperationFailedMessage(
+  message: ServerMessage,
+): message is TextOperationFailedMessage {
+  return message.type === "text_operation_failed";
 }

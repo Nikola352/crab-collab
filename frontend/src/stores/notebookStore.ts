@@ -21,6 +21,7 @@ import { type Cell, type CellOutput, isCodeCell } from "../types/cell";
 
 interface NotebookState {
   version: number;
+  cellVersions: Record<string, number>;
   cells: Record<string, Cell>;
   cellOrder: string[];
 
@@ -37,6 +38,9 @@ interface NotebookState {
   pendingOperations: Operation[];
 
   setVersion: (version: number) => void;
+  getCellVersion: (cellId: string) => number;
+  setCellVersions: (versions: Record<string, number>) => void;
+  setCellVersion: (cellId: string, version: number) => void;
   getCell: (id: string) => Cell | undefined;
   getAllCells: () => Cell[];
   setCells: (cells: Cell[]) => void;
@@ -67,6 +71,7 @@ interface NotebookState {
 export const useNotebookStore = create<NotebookState>()(
   immer((set, get) => ({
     version: 0,
+    cellVersions: {},
     cells: {},
     cellOrder: [],
 
@@ -78,6 +83,15 @@ export const useNotebookStore = create<NotebookState>()(
     pendingOperations: [],
 
     setVersion: (version) => set({ version }),
+
+    getCellVersion: (cellId) => get().cellVersions[cellId] ?? 0,
+
+    setCellVersions: (versions) => set({ cellVersions: versions }),
+
+    setCellVersion: (cellId, version) =>
+      set((state) => {
+        state.cellVersions[cellId] = version;
+      }),
 
     getCell: (id) => get().cells[id],
 
@@ -94,7 +108,7 @@ export const useNotebookStore = create<NotebookState>()(
       set((state) => {
         const op = {
           id,
-          version: state.version,
+          version: state.cellVersions[cellId] ?? 0,
           type: "text_insert",
           cell_id: cellId,
           start_position: startPosition,
@@ -114,7 +128,7 @@ export const useNotebookStore = create<NotebookState>()(
       set((state) => {
         const op = {
           id,
-          version: state.version,
+          version: state.cellVersions[cellId] ?? 0,
           type: "text_delete",
           cell_id: cellId,
           start_position: startPosition,
@@ -213,7 +227,7 @@ export const useNotebookStore = create<NotebookState>()(
       set((state) => {
         if (state.unconfirmedOperations.length == 0) {
           handleOperation(state, operation);
-          state.version = operation.version;
+          updateVersion(state, operation);
           return;
         }
 
@@ -254,15 +268,26 @@ function syncWithServer(state: NotebookState) {
   state.cells = state.confirmedState.cells;
   state.cellOrder = state.confirmedState.cellOrder;
 
-  // apply all ops
+  // apply all ops and update the appropriate version counter per op
   for (const op of state.pendingOperations) {
     handleOperation(state, op);
+    updateVersion(state, op);
   }
 
-  state.version =
-    state.pendingOperations[state.pendingOperations.length - 1].version;
   state.pendingOperations = [];
   state.unconfirmedOperations = [];
+}
+
+function updateVersion(state: NotebookState, operation: Operation) {
+  if (isTextInsertOp(operation) || isTextDeleteOp(operation)) {
+    state.cellVersions[operation.cell_id] = operation.version;
+  } else if (
+    isInsertOp(operation) ||
+    isDeleteOp(operation) ||
+    isMoveOp(operation)
+  ) {
+    state.version = operation.version;
+  }
 }
 
 function handleOperation(state: NotebookState, operation: Operation) {
@@ -275,6 +300,7 @@ function handleOperation(state: NotebookState, operation: Operation) {
 
 function insertCell(state: NotebookState, { cell, index }: InsertOp) {
   state.cells[cell.id] = cell;
+  state.cellVersions[cell.id] = 0;
 
   if (index !== undefined && index >= 0 && index <= state.cellOrder.length) {
     state.cellOrder.splice(index, 0, cell.id);
@@ -285,6 +311,7 @@ function insertCell(state: NotebookState, { cell, index }: InsertOp) {
 
 function deleteCell(state: NotebookState, { cell_id }: DeleteOp) {
   delete state.cells[cell_id];
+  delete state.cellVersions[cell_id];
   state.cellOrder = state.cellOrder.filter((id) => id !== cell_id);
 }
 

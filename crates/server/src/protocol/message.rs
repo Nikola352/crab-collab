@@ -1,6 +1,10 @@
-use crate::protocol::types::{CellId, Execution, OperationContext, StateUpdateContext, User, UserId};
+use crate::protocol::types::{
+    CellId, Execution, NotebookOperationContext, NotebookStateUpdateContext, TextOperationContext,
+    TextStateUpdateContext, User, UserId,
+};
 use notebook::notebook::{Cell, Notebook};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -16,29 +20,29 @@ pub enum ClientMessage {
         name: String,
     },
     CellInsert {
-        context: OperationContext,
+        context: NotebookOperationContext,
         index: usize,
         cell_id: CellId,
         cell_type: CellType,
         content: Option<String>,
     },
     CellDelete {
-        context: OperationContext,
+        context: NotebookOperationContext,
         cell_id: CellId,
     },
     CellMove {
-        context: OperationContext,
+        context: NotebookOperationContext,
         cell_id: CellId,
         to_index: usize,
     },
     TextInsert {
-        context: OperationContext,
+        context: TextOperationContext,
         cell_id: CellId,
         start_position: usize,
         text: String,
     },
     TextDelete {
-        context: OperationContext,
+        context: TextOperationContext,
         cell_id: CellId,
         start_position: usize,
         end_position: usize,
@@ -65,42 +69,48 @@ pub enum ServerMessage {
     FullState {
         notebook: Notebook,
         version: u64,
+        cell_versions: HashMap<CellId, u64>,
         pending_executions: Vec<Execution>,
         users: Vec<User>,
         user_id: UserId,
     },
     CellInsert {
-        context: StateUpdateContext,
+        context: NotebookStateUpdateContext,
         index: usize,
         cell: Cell,
     },
     CellDelete {
-        context: StateUpdateContext,
+        context: NotebookStateUpdateContext,
         cell_id: CellId,
     },
     CellMove {
-        context: StateUpdateContext,
+        context: NotebookStateUpdateContext,
         cell_id: CellId,
         from_index: usize,
         to_index: usize,
     },
 
     TextInsert {
-        context: StateUpdateContext,
+        context: TextStateUpdateContext,
         cell_id: CellId,
         start_position: usize,
         end_position: usize,
         text: String,
     },
     TextDelete {
-        context: StateUpdateContext,
+        context: TextStateUpdateContext,
         cell_id: CellId,
         start_position: usize,
         end_position: usize,
     },
 
     OperationFailed {
-        context: StateUpdateContext,
+        context: NotebookStateUpdateContext,
+        message: String,
+    },
+
+    TextOperationFailed {
+        context: TextStateUpdateContext,
         message: String,
     },
 
