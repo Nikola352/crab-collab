@@ -1,0 +1,16 @@
+[package]
+name = "ot"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { workspace = true }
+operational-transform = { version = "0.6.1", features = ["serde"] }
+wasm-bindgen = { version = "0.2.126", optional = true }
+tsify = { version = "0.5.6", default-features = false, features = ["js"], optional = true }
+
+[features]
+wasm = ["dep:wasm-bindgen", "dep:tsify"]
