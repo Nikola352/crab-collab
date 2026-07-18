@@ -4,8 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "wasm:build": "../scripts/wasm-build.sh ot --dev",
+    "wasm:build:release": "../scripts/wasm-build.sh ot --release",
+    "wasm:watch": "../scripts/wasm-build.sh ot --dev --watch",
+    "dev": "bun run wasm:build && concurrently -n wasm,vite -c yellow,cyan \"bun run wasm:watch\" \"vite\"",
+    "build": "bun run wasm:build:release && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "format": "prettier --write ."
@@ -31,6 +34,7 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "concurrently": "^10.0.3",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
@@ -38,7 +42,8 @@
     "prettier": "^3.8.1",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "npm:rolldown-vite@7.2.5"
+    "vite": "npm:rolldown-vite@7.2.5",
+    "vite-plugin-wasm": "^3.6.0"
   },
   "overrides": {
     "vite": "npm:rolldown-vite@7.2.5"
