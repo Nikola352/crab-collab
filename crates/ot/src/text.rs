@@ -96,3 +96,8 @@ pub fn transform(a: &TextOperation, b: &TextOperation) -> Result<TextTransformRe
         b_prime: TextOperation(b_prime),
     })
 }
+
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn apply(operation: &TextOperation, text: &str) -> Result<String, OTError> {
+    Ok(operation.0.apply(text)?)
+}
