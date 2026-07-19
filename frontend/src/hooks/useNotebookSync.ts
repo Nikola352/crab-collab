@@ -7,6 +7,7 @@ import { useFocusSync } from "./useFocusSync";
 import { useNotebookStore } from "../stores/notebookStore";
 import { useSessionStore } from "../stores/sessionStore";
 import { useUserStore } from "../stores/userStore";
+import { TextOperation } from "../wasm/ot/ot";
 
 import type { MessageHandler } from "./useWebsocket";
 import type { ClientMessage } from "../types/client-message";
@@ -17,8 +18,7 @@ import type {
   CellInsertMessage,
   CellDeleteMessage,
   CellMoveMessage,
-  TextInsertMessage,
-  TextDeleteMessage,
+  TextEditMessage,
   OperationFailedMessage,
   TextOperationFailedMessage,
   ChangeFocusMessage,
@@ -33,8 +33,7 @@ import type {
   InsertOp,
   MoveOp,
   NoOp,
-  TextInsertOp,
-  TextDeleteOp,
+  TextEditOp,
 } from "../types/operation";
 import {
   isCodeCell,
@@ -78,6 +77,9 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
   );
   const receiveServerOperation = useNotebookStore(
     (state) => state.receiveServerOperation,
+  );
+  const receiveServerTextOperation = useNotebookStore(
+    (state) => state.receiveServerTextOperation,
   );
 
   // --- Server message handlers ---
@@ -229,56 +231,22 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     [receiveServerOperation],
   );
 
-  const handleTextInsert = useCallback(
-    (msg: TextInsertMessage) => {
-      const operation: TextInsertOp = {
+  const handleTextEdit = useCallback(
+    (msg: TextEditMessage) => {
+      const operation: TextEditOp = {
         id: msg.context.request_id,
         version: msg.context.cell_version,
-        type: "text_insert",
+        type: "text_edit",
         cell_id: msg.cell_id,
-        start_position: msg.start_position,
-        text: msg.text,
+        operation: TextOperation.fromJSON(JSON.stringify(msg.operation)),
       };
       const isOwn = msg.context.user_id === useSessionStore.getState().userId;
-      receiveServerOperation(operation, isOwn);
-      textSync.initCell(
-        msg.cell_id,
-        useNotebookStore.getState().getCell(msg.cell_id)?.content ?? "",
-      );
+      receiveServerTextOperation(operation, isOwn, send);
       if (!isOwn) {
-        updateUser(msg.context.user_id, {
-          focused_cell: msg.cell_id,
-          cursor_position: msg.start_position + msg.text.length,
-        });
+        // TODO: update focus position
       }
     },
-    [receiveServerOperation, textSync, updateUser],
-  );
-
-  const handleTextDelete = useCallback(
-    (msg: TextDeleteMessage) => {
-      const operation: TextDeleteOp = {
-        id: msg.context.request_id,
-        version: msg.context.cell_version,
-        type: "text_delete",
-        cell_id: msg.cell_id,
-        start_position: msg.start_position,
-        end_position: msg.end_position,
-      };
-      const isOwn = msg.context.user_id === useSessionStore.getState().userId;
-      receiveServerOperation(operation, isOwn);
-      textSync.initCell(
-        msg.cell_id,
-        useNotebookStore.getState().getCell(msg.cell_id)?.content ?? "",
-      );
-      if (!isOwn) {
-        updateUser(msg.context.user_id, {
-          focused_cell: msg.cell_id,
-          cursor_position: msg.start_position,
-        });
-      }
-    },
-    [receiveServerOperation, textSync, updateUser],
+    [receiveServerTextOperation, send],
   );
 
   const handleChangeFocus = useCallback(
@@ -341,8 +309,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     on("cell_insert", (msg) => handleCellInsert(msg as CellInsertMessage));
     on("cell_delete", (msg) => handleCellDelete(msg as CellDeleteMessage));
     on("cell_move", (msg) => handleCellMove(msg as CellMoveMessage));
-    on("text_insert", (msg) => handleTextInsert(msg as TextInsertMessage));
-    on("text_delete", (msg) => handleTextDelete(msg as TextDeleteMessage));
+    on("text_edit", (msg) => handleTextEdit(msg as TextEditMessage));
     on("operation_failed", (msg) =>
       handleOperationFailed(msg as OperationFailedMessage),
     );
@@ -369,8 +336,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     handleCellInsert,
     handleCellDelete,
     handleCellMove,
-    handleTextInsert,
-    handleTextDelete,
+    handleTextEdit,
     handleOperationFailed,
     handleTextOperationFailed,
     handleChangeFocus,

@@ -3,6 +3,7 @@ use crate::protocol::types::{
     TextStateUpdateContext, User, UserId,
 };
 use notebook::notebook::{Cell, Notebook};
+use ot::text::TextOperation;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -35,17 +36,10 @@ pub enum ClientMessage {
         cell_id: CellId,
         to_index: usize,
     },
-    TextInsert {
+    TextEdit {
         context: TextOperationContext,
         cell_id: CellId,
-        start_position: usize,
-        text: String,
-    },
-    TextDelete {
-        context: TextOperationContext,
-        cell_id: CellId,
-        start_position: usize,
-        end_position: usize,
+        operation: TextOperation,
     },
     ChangeFocus {
         cell_id: CellId,
@@ -90,18 +84,10 @@ pub enum ServerMessage {
         to_index: usize,
     },
 
-    TextInsert {
+    TextEdit {
         context: TextStateUpdateContext,
         cell_id: CellId,
-        start_position: usize,
-        end_position: usize,
-        text: String,
-    },
-    TextDelete {
-        context: TextStateUpdateContext,
-        cell_id: CellId,
-        start_position: usize,
-        end_position: usize,
+        operation: TextOperation,
     },
 
     OperationFailed {

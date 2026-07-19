@@ -104,37 +104,12 @@ async fn handle_client_message(
         } => {
             handler::notebook::handle_move_cell(user_id, context, cell_id, to_index, state).await?
         }
-        ClientMessage::TextInsert {
+        ClientMessage::TextEdit {
             context,
             cell_id,
-            start_position,
-            text,
+            operation,
         } => {
-            handler::notebook::handle_text_insert(
-                user_id,
-                context,
-                cell_id,
-                start_position,
-                text,
-                state,
-            )
-            .await?
-        }
-        ClientMessage::TextDelete {
-            context,
-            cell_id,
-            start_position,
-            end_position,
-        } => {
-            handler::notebook::handle_text_delete(
-                user_id,
-                context,
-                cell_id,
-                start_position,
-                end_position,
-                state,
-            )
-            .await?
+            handler::notebook::handle_text_edit(user_id, context, cell_id, operation, state).await?
         }
         ClientMessage::ChangeFocus {
             cell_id,

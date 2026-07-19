@@ -1,17 +1,14 @@
 import { useCallback, useRef } from "react";
 import { useNotebookStore } from "../stores/notebookStore";
 import type { CellId } from "../types/cell";
-import type {
-  ClientMessage,
-  TextDeleteMessage,
-  TextInsertMessage,
-} from "../types/client-message";
+import type { ClientMessage } from "../types/client-message";
+import { TextOperation } from "../wasm/ot/ot";
 
 type SendFn = (message: ClientMessage) => void;
 
 const DEBOUNCE_MS = 100;
 
-function computeDiff(oldStr: string, newStr: string) {
+function computeDiff(oldStr: string, newStr: string): TextOperation {
   let prefixLen = 0;
   while (
     prefixLen < oldStr.length &&
@@ -31,11 +28,21 @@ function computeDiff(oldStr: string, newStr: string) {
     suffixLen++;
   }
 
-  return {
-    deleteStart: prefixLen,
-    deleteEnd: oldStr.length - suffixLen,
-    insertText: newStr.slice(prefixLen, newStr.length - suffixLen),
-  };
+  const operation = TextOperation.default();
+  if (prefixLen > 0) {
+    operation.retain(prefixLen);
+  }
+  if (prefixLen + suffixLen < oldStr.length) {
+    operation.delete(oldStr.length - (prefixLen + suffixLen));
+  }
+  if (prefixLen + suffixLen < newStr.length) {
+    operation.insert(newStr.slice(prefixLen, newStr.length - suffixLen));
+  }
+  if (suffixLen > 0) {
+    operation.retain(suffixLen);
+  }
+
+  return operation;
 }
 
 export function useTextSync(send: SendFn) {
@@ -60,47 +67,9 @@ export function useTextSync(send: SendFn) {
         const oldContent = lastSentContent.current.get(cellId) ?? "";
         if (currentContent === oldContent) return;
 
-        const diff = computeDiff(oldContent, currentContent);
+        const diffOp = computeDiff(oldContent, currentContent);
 
-        if (diff.deleteEnd > diff.deleteStart) {
-          const requestId = store.textDelete(
-            cellId,
-            diff.deleteStart,
-            diff.deleteEnd,
-          );
-          send({
-            type: "text_delete",
-            context: {
-              base_cell_version: useNotebookStore
-                .getState()
-                .getCellVersion(cellId),
-              request_id: requestId,
-            },
-            cell_id: cellId,
-            start_position: diff.deleteStart,
-            end_position: diff.deleteEnd,
-          } as TextDeleteMessage);
-        }
-
-        if (diff.insertText.length > 0) {
-          const requestId = store.textInsert(
-            cellId,
-            diff.deleteStart,
-            diff.insertText,
-          );
-          send({
-            type: "text_insert",
-            context: {
-              base_cell_version: useNotebookStore
-                .getState()
-                .getCellVersion(cellId),
-              request_id: requestId,
-            },
-            cell_id: cellId,
-            start_position: diff.deleteStart,
-            text: diff.insertText,
-          } as TextInsertMessage);
-        }
+        store.textEdit(cellId, diffOp, send);
 
         lastSentContent.current.set(cellId, currentContent);
       }, DEBOUNCE_MS);

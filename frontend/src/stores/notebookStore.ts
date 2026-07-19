@@ -6,18 +6,25 @@ import {
   type DeleteOp,
   type InsertOp,
   type MoveOp,
-  type TextInsertOp,
-  type TextDeleteOp,
   isDeleteOp,
   isInsertOp,
   isMoveOp,
-  isTextInsertOp,
-  isTextDeleteOp,
   type Operation,
   type RequestId,
+  type TextEditOp,
+  isTextEditOp,
 } from "../types/operation";
 
-import { type Cell, type CellOutput, isCodeCell } from "../types/cell";
+import {
+  type Cell,
+  type CellId,
+  type CellOutput,
+  isCodeCell,
+} from "../types/cell";
+import { apply, transform, type TextOperation } from "../wasm/ot/ot";
+import type { ClientMessage, TextEditMessage } from "../types/client-message";
+
+type SendFn = (message: ClientMessage) => void;
 
 interface NotebookState {
   version: number;
@@ -37,6 +44,12 @@ interface NotebookState {
   // operations received from the server, but not yet applied to UI
   pendingOperations: Operation[];
 
+  // optimistic updates applied to the UI, but not yet sent to the server
+  pendingTextOperations: Record<CellId, TextEditOp[]>;
+
+  // optimistic update applied to the UI, sent to the server, but not yet confirmed
+  unconfirmedTextOperation: Record<CellId, TextEditOp | null>;
+
   setVersion: (version: number) => void;
   getCellVersion: (cellId: string) => number;
   setCellVersions: (versions: Record<string, number>) => void;
@@ -47,16 +60,7 @@ interface NotebookState {
   insertCell: (cell: Cell, index: number) => RequestId;
   removeCell: (cell: Cell) => RequestId;
   moveCell: (cellId: string, toIndex: number) => RequestId;
-  textInsert: (
-    cellId: string,
-    startPosition: number,
-    text: string,
-  ) => RequestId;
-  textDelete: (
-    cellId: string,
-    startPosition: number,
-    endPosition: number,
-  ) => RequestId;
+  textEdit: (cellId: string, operation: TextOperation, send: SendFn) => void;
   updateCellOutput: (cellId: string, outputs: CellOutput[]) => void;
   clearCellOutputs: (cellId: string) => void;
   setCellExecutionState: (
@@ -66,6 +70,11 @@ interface NotebookState {
   startCellExecution: (cellId: string) => void;
   finishCellExecution: (cellId: string, executionCount: number) => void;
   receiveServerOperation: (operation: Operation, isOwn: boolean) => void;
+  receiveServerTextOperation: (
+    operation: TextEditOp,
+    isOwn: boolean,
+    send: SendFn,
+  ) => void;
 }
 
 export const useNotebookStore = create<NotebookState>()(
@@ -81,6 +90,9 @@ export const useNotebookStore = create<NotebookState>()(
     },
     unconfirmedOperations: [],
     pendingOperations: [],
+
+    pendingTextOperations: {},
+    unconfirmedTextOperation: {},
 
     setVersion: (version) => set({ version }),
 
@@ -101,42 +113,28 @@ export const useNotebookStore = create<NotebookState>()(
       set({
         cells: cells.reduce((acc, cell) => ({ ...acc, [cell.id]: cell }), {}),
         cellOrder: cells.map((c) => c.id),
+        pendingTextOperations: cells.reduce(
+          (acc, cell) => ({ ...acc, [cell.id]: [] }),
+          {},
+        ),
+        unconfirmedTextOperation: cells.reduce(
+          (acc, cell) => ({ ...acc, [cell.id]: null }),
+          {},
+        ),
       }),
 
-    textInsert: (cellId: string, startPosition: number, text: string) => {
+    textEdit: (cellId: string, operation: TextOperation, send: SendFn) => {
       const id = uuidv4() as RequestId;
       set((state) => {
         const op = {
           id,
           version: state.cellVersions[cellId] ?? 0,
-          type: "text_insert",
+          type: "text_edit",
           cell_id: cellId,
-          start_position: startPosition,
-          text,
-        } as TextInsertOp;
-        applyLocalOperation(state, op);
+          operation,
+        } as TextEditOp;
+        applyLocalTextOperation(state, op, send);
       });
-      return id;
-    },
-
-    textDelete: (
-      cellId: string,
-      startPosition: number,
-      endPosition: number,
-    ) => {
-      const id = uuidv4() as RequestId;
-      set((state) => {
-        const op = {
-          id,
-          version: state.cellVersions[cellId] ?? 0,
-          type: "text_delete",
-          cell_id: cellId,
-          start_position: startPosition,
-          end_position: endPosition,
-        } as TextDeleteOp;
-        applyLocalOperation(state, op);
-      });
-      return id;
     },
 
     insertCell: (cell: Cell, index: number) => {
@@ -242,6 +240,48 @@ export const useNotebookStore = create<NotebookState>()(
           syncWithServer(state);
         }
       }),
+
+    receiveServerTextOperation: (
+      operation: TextEditOp,
+      isOwn: boolean,
+      send: SendFn,
+    ) =>
+      set((state) => {
+        const cellId = operation.cell_id;
+
+        if (
+          isOwn &&
+          operation.id === state.unconfirmedTextOperation[cellId]?.id
+        ) {
+          state.cellVersions[cellId] = operation.version;
+          state.unconfirmedTextOperation[cellId] = null;
+          pushTextOpToServer(state, cellId, send);
+          return;
+        }
+
+        let text_operation = operation.operation;
+
+        const unconfirmed = state.unconfirmedTextOperation[cellId];
+        if (unconfirmed != null) {
+          const { aPrime: transformed } = transform(
+            text_operation,
+            unconfirmed.operation,
+          );
+          text_operation = transformed;
+        }
+
+        for (const op of state.pendingTextOperations[cellId] ?? []) {
+          const { aPrime, bPrime } = transform(text_operation, op.operation);
+          text_operation = aPrime;
+          op.operation = bPrime;
+          op.version = operation.version;
+        }
+
+        operation.operation = text_operation;
+        editText(state, operation);
+
+        state.cellVersions[cellId] = operation.version;
+      }),
   })),
 );
 
@@ -279,7 +319,7 @@ function syncWithServer(state: NotebookState) {
 }
 
 function updateVersion(state: NotebookState, operation: Operation) {
-  if (isTextInsertOp(operation) || isTextDeleteOp(operation)) {
+  if (isTextEditOp(operation)) {
     state.cellVersions[operation.cell_id] = operation.version;
   } else if (
     isInsertOp(operation) ||
@@ -294,13 +334,12 @@ function handleOperation(state: NotebookState, operation: Operation) {
   if (isInsertOp(operation)) insertCell(state, operation);
   else if (isDeleteOp(operation)) deleteCell(state, operation);
   else if (isMoveOp(operation)) moveCellInOrder(state, operation);
-  else if (isTextInsertOp(operation)) insertText(state, operation);
-  else if (isTextDeleteOp(operation)) deleteText(state, operation);
 }
 
 function insertCell(state: NotebookState, { cell, index }: InsertOp) {
   state.cells[cell.id] = cell;
   state.cellVersions[cell.id] = 0;
+  state.pendingTextOperations[cell.id] = [];
 
   if (index !== undefined && index >= 0 && index <= state.cellOrder.length) {
     state.cellOrder.splice(index, 0, cell.id);
@@ -312,6 +351,7 @@ function insertCell(state: NotebookState, { cell, index }: InsertOp) {
 function deleteCell(state: NotebookState, { cell_id }: DeleteOp) {
   delete state.cells[cell_id];
   delete state.cellVersions[cell_id];
+  delete state.pendingTextOperations[cell_id];
   state.cellOrder = state.cellOrder.filter((id) => id !== cell_id);
 }
 
@@ -323,27 +363,40 @@ function moveCellInOrder(state: NotebookState, { cell_id, to_index }: MoveOp) {
   state.cellOrder.splice(clamped, 0, cell_id);
 }
 
-function insertText(
+function applyLocalTextOperation(
   state: NotebookState,
-  { cell_id, start_position, text }: TextInsertOp,
+  operation: TextEditOp,
+  send: SendFn,
 ) {
-  if (state.cells[cell_id]) {
-    const content = state.cells[cell_id].content;
-    const clamped = Math.min(start_position, content.length);
-    state.cells[cell_id].content =
-      content.slice(0, clamped) + text + content.slice(clamped);
+  editText(state, operation);
+  state.pendingTextOperations[operation.cell_id].push(operation);
+  if (state.unconfirmedTextOperation[operation.cell_id] == null) {
+    pushTextOpToServer(state, operation.cell_id, send);
   }
 }
 
-function deleteText(
+function editText(state: NotebookState, { cell_id, operation }: TextEditOp) {
+  state.cells[cell_id].content = apply(operation, state.cells[cell_id].content);
+}
+
+function pushTextOpToServer(
   state: NotebookState,
-  { cell_id, start_position, end_position }: TextDeleteOp,
+  cellId: CellId,
+  send: SendFn,
 ) {
-  if (state.cells[cell_id]) {
-    const content = state.cells[cell_id].content;
-    const clampedStart = Math.min(start_position, content.length);
-    const clampedEnd = Math.min(end_position, content.length);
-    state.cells[cell_id].content =
-      content.slice(0, clampedStart) + content.slice(clampedEnd);
+  if (!state.pendingTextOperations[cellId]?.length) {
+    return;
   }
+  const operation = state.pendingTextOperations[cellId].shift()!;
+  state.unconfirmedTextOperation[cellId] = operation;
+
+  send({
+    type: "text_edit",
+    context: {
+      base_cell_version: operation.version,
+      request_id: operation.id,
+    },
+    cell_id: cellId,
+    operation: operation.operation,
+  } as TextEditMessage);
 }

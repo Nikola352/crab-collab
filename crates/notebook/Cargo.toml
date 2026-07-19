@@ -10,3 +10,5 @@ serde_json = { workspace = true }
 uuid = { workspace = true }
 
 async-trait = "0.1.89"
+
+ot = { path = "../ot" }

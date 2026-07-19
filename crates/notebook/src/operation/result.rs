@@ -1,4 +1,5 @@
 use crate::notebook::{Cell, CellId};
+use ot::text::TextOperation;
 
 #[derive(Debug, Clone)]
 pub struct NotebookOperationResult {
@@ -26,20 +27,6 @@ pub enum NotebookOperationResultData {
 #[derive(Debug, Clone)]
 pub struct TextOperationResult {
     pub version: u64,
-    pub data: TextOperationResultData,
-}
-
-#[derive(Debug, Clone)]
-pub enum TextOperationResultData {
-    TextInsert {
-        cell_id: CellId,
-        start_position: usize,
-        end_position: usize,
-        text: String,
-    },
-    TextDelete {
-        cell_id: CellId,
-        start_position: usize,
-        end_position: usize,
-    },
+    pub cell_id: CellId,
+    pub operation: TextOperation,
 }

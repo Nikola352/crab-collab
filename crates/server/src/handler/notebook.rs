@@ -7,8 +7,9 @@ use crate::protocol::types::{
 use crate::state::AppState;
 use notebook::error::NotebookError;
 use notebook::notebook::Cell;
-use notebook::operation::result::{NotebookOperationResultData, TextOperationResultData};
-use notebook::operation::{NotebookOperation, TextOperation};
+use notebook::operation::NotebookOperation;
+use notebook::operation::result::NotebookOperationResultData;
+use ot::text::TextOperation;
 use std::error::Error;
 
 pub async fn handle_insert_cell(
@@ -144,19 +145,13 @@ pub async fn handle_move_cell(
     Ok(())
 }
 
-pub async fn handle_text_insert(
+pub async fn handle_text_edit(
     user_id: UserId,
     context: TextOperationContext,
     cell_id: CellId,
-    start_position: usize,
-    text: String,
+    operation: TextOperation,
     state: &AppState,
 ) -> Result<(), Box<dyn Error>> {
-    let operation = TextOperation::TextInsert {
-        start_position,
-        text,
-    };
-
     let result = state
         .notebook
         .apply_text_operation(operation, cell_id, context.base_cell_version)
@@ -164,79 +159,19 @@ pub async fn handle_text_insert(
 
     match result {
         Ok(result) => {
-            if let TextOperationResultData::TextInsert {
-                cell_id,
-                start_position,
-                end_position,
-                text,
-            } = result.data
-            {
-                handler::user::set_focus(user_id, cell_id, Some(end_position), state).await;
+            // TODO: sync focus
+            // handler::user::set_focus(user_id, cell_id, Some(end_position), state).await;
 
-                state
-                    .broadcast(
-                        ServerMessage::TextInsert {
-                            context: create_text_output_context(result.version, user_id, &context),
-                            cell_id,
-                            start_position,
-                            end_position,
-                            text,
-                        },
-                        None,
-                    )
-                    .await?;
-            } else {
-                tracing::error!("Operation produced incorrect result type. Result: {result:?}");
-            }
-        }
-        Err(err) => send_text_error_message(user_id, &context, cell_id, state, err).await?,
-    }
-
-    Ok(())
-}
-
-pub async fn handle_text_delete(
-    user_id: UserId,
-    context: TextOperationContext,
-    cell_id: CellId,
-    start_position: usize,
-    end_position: usize,
-    state: &AppState,
-) -> Result<(), Box<dyn Error>> {
-    let operation = TextOperation::TextDelete {
-        start_position,
-        end_position,
-    };
-
-    let result = state
-        .notebook
-        .apply_text_operation(operation, cell_id, context.base_cell_version)
-        .await;
-
-    match result {
-        Ok(result) => {
-            if let TextOperationResultData::TextDelete {
-                cell_id,
-                start_position,
-                end_position,
-            } = result.data
-            {
-                handler::user::set_focus(user_id, cell_id, Some(start_position), state).await;
-
-                state
-                    .broadcast(
-                        ServerMessage::TextDelete {
-                            context: create_text_output_context(result.version, user_id, &context),
-                            cell_id,
-                            start_position,
-                            end_position,
-                        },
-                        None,
-                    )
-                    .await?;
-            } else {
-                tracing::error!("Operation produced incorrect result type. Result: {result:?}");
-            }
+            state
+                .broadcast(
+                    ServerMessage::TextEdit {
+                        context: create_text_output_context(result.version, user_id, &context),
+                        cell_id,
+                        operation: result.operation,
+                    },
+                    None,
+                )
+                .await?;
         }
         Err(err) => send_text_error_message(user_id, &context, cell_id, state, err).await?,
     }

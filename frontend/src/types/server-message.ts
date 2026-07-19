@@ -4,6 +4,8 @@ import type { Notebook } from "./notebook";
 import type { RequestId } from "./operation";
 import type { User, UserId } from "./user";
 
+export type SerializedTextOperation = (number | string)[];
+
 // User messages
 export interface JoinMessage {
   type: "join";
@@ -60,21 +62,11 @@ export interface CellMoveMessage {
   to_index: number;
 }
 
-export interface TextInsertMessage {
-  type: "text_insert";
+export interface TextEditMessage {
+  type: "text_edit";
   context: TextStateUpdateContext;
   cell_id: CellId;
-  start_position: number;
-  end_position: number;
-  text: string;
-}
-
-export interface TextDeleteMessage {
-  type: "text_delete";
-  context: TextStateUpdateContext;
-  cell_id: CellId;
-  start_position: number;
-  end_position: number;
+  operation: SerializedTextOperation;
 }
 
 export interface OperationFailedMessage {
@@ -133,8 +125,7 @@ export type ServerMessage =
   | CellInsertMessage
   | CellDeleteMessage
   | CellMoveMessage
-  | TextInsertMessage
-  | TextDeleteMessage
+  | TextEditMessage
   | OperationFailedMessage
   | TextOperationFailedMessage
   | ChangeFocusMessage
@@ -179,16 +170,10 @@ export function isCellMoveMessage(
   return message.type === "cell_move";
 }
 
-export function isTextInsertMessage(
+export function isTextEditMessage(
   message: ServerMessage,
-): message is TextInsertMessage {
-  return message.type === "text_insert";
-}
-
-export function isTextDeleteMessage(
-  message: ServerMessage,
-): message is TextDeleteMessage {
-  return message.type === "text_delete";
+): message is TextEditMessage {
+  return message.type === "text_edit";
 }
 
 export function isChangeFocusMessage(

@@ -1,8 +1,9 @@
 use crate::error::NotebookError;
 use crate::notebook::{CellId, CellOutput, Notebook};
 use crate::operation::result::{NotebookOperationResult, TextOperationResult};
-use crate::operation::{NotebookOperation, TextOperation};
+use crate::operation::{NotebookOperation};
 use std::collections::HashMap;
+use ot::text::TextOperation;
 
 #[async_trait::async_trait]
 pub trait NotebookStateHolder: Send + Sync {
