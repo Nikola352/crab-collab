@@ -69,6 +69,7 @@ async fn websocket_connection(stream: WebSocket, state: AppState) {
     {
         state.users.write().await.remove(&user_id);
     }
+    state.focus.clear_user_focus(user_id).await;
 
     if let Err(err) = handler::user::handle_leave(user_id, &state).await {
         tracing::error!("Failed to broadcast user leave: {err}");

@@ -21,6 +21,7 @@ import {
   type CellOutput,
   isCodeCell,
 } from "../types/cell";
+import { useUserStore } from "./userStore";
 import { apply, transform, type TextOperation } from "../wasm/ot/ot";
 import type { ClientMessage, TextEditMessage } from "../types/client-message";
 
@@ -377,6 +378,9 @@ function applyLocalTextOperation(
 
 function editText(state: NotebookState, { cell_id, operation }: TextEditOp) {
   state.cells[cell_id].content = apply(operation, state.cells[cell_id].content);
+  useUserStore
+    .getState()
+    .transformfocusPositionsForTextEdit(cell_id, operation);
 }
 
 function pushTextOpToServer(

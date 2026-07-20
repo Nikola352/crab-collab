@@ -1,6 +1,7 @@
 use crate::error::OTError;
-use operational_transform::OperationSeq;
+use operational_transform::{Operation, OperationSeq};
 use serde::{Deserialize, Serialize};
+use std::cmp::min;
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
@@ -100,4 +101,32 @@ pub fn transform(a: &TextOperation, b: &TextOperation) -> Result<TextTransformRe
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn apply(operation: &TextOperation, text: &str) -> Result<String, OTError> {
     Ok(operation.0.apply(text)?)
+}
+
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn transform_position(position: usize, operation: &TextOperation) -> usize {
+    let mut pos = position;
+    let mut new_pos = position;
+    for op in operation.0.ops() {
+        match op {
+            Operation::Retain(len) => {
+                if pos < *len as usize {
+                    break;
+                }
+                pos -= *len as usize;
+            }
+            Operation::Insert(text) => {
+                new_pos += text.len();
+            }
+            Operation::Delete(len) => {
+                new_pos -= min(pos, *len as usize);
+                if pos < *len as usize {
+                    break;
+                }
+                pos -= *len as usize;
+            }
+        }
+    }
+
+    new_pos
 }

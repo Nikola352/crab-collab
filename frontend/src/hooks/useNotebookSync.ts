@@ -49,8 +49,8 @@ type SendFn = (message: ClientMessage) => void;
 type OnFn = (messageType: string, handler: MessageHandler) => void;
 
 export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
-  const textSync = useTextSync(send);
   const { sendFocusChange } = useFocusSync(send);
+  const textSync = useTextSync(send, sendFocusChange);
 
   const setSession = useSessionStore((state) => state.setSession);
   const setCells = useNotebookStore((state) => state.setCells);
@@ -243,10 +243,16 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
       const isOwn = msg.context.user_id === useSessionStore.getState().userId;
       receiveServerTextOperation(operation, isOwn, send);
       if (!isOwn) {
-        // TODO: update focus position
+        // After sync from server, update content for next edits to diff against
+        const updatedContent = useNotebookStore
+          .getState()
+          .getCell(msg.cell_id)?.content;
+        if (updatedContent !== undefined) {
+          textSync.initCell(msg.cell_id, updatedContent);
+        }
       }
     },
-    [receiveServerTextOperation, send],
+    [receiveServerTextOperation, send, textSync],
   );
 
   const handleChangeFocus = useCallback(
@@ -261,7 +267,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
 
   const handleExecutionPending = useCallback(
     (msg: ExecutionPendingMessage) => {
-      setCellExecutionState(msg.cell_id, "pending");  
+      setCellExecutionState(msg.cell_id, "pending");
     },
     [setCellExecutionState],
   );
@@ -352,6 +358,13 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
   const handleContentChange = useCallback(
     (cellId: CellId, content: string) => {
       textSync.scheduleSync(cellId, content);
+    },
+    [textSync],
+  );
+
+  const handleContentDrivenFocusChange = useCallback(
+    (cellId: CellId, cursorPosition: number) => {
+      textSync.noteCursorPosition(cellId, cursorPosition);
     },
     [textSync],
   );
@@ -447,6 +460,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     handleDeleteCell,
     handleMoveCell,
     handleContentChange,
+    handleContentDrivenFocusChange,
     handleExecuteCell,
     sendFocusChange,
   };

@@ -6,7 +6,7 @@ import { TextOperation } from "../wasm/ot/ot";
 
 type SendFn = (message: ClientMessage) => void;
 
-const DEBOUNCE_MS = 100;
+const DEBOUNCE_MS = 200;
 
 function computeDiff(oldStr: string, newStr: string): TextOperation {
   let prefixLen = 0;
@@ -45,9 +45,14 @@ function computeDiff(oldStr: string, newStr: string): TextOperation {
   return operation;
 }
 
-export function useTextSync(send: SendFn) {
+type ReportFocusFn = (cellId: CellId, cursorPosition: number) => void;
+
+export function useTextSync(send: SendFn, reportFocus: ReportFocusFn) {
   const lastSentContent = useRef<Map<CellId, string>>(new Map());
   const debounceTimers = useRef<Map<CellId, number>>(new Map());
+  // Cursor positions from edits (typing/paste/undo), held back so they never
+  // reach other clients ahead of the text_edit that produced them
+  const pendingCursorPositions = useRef<Map<CellId, number>>(new Map());
 
   const scheduleSync = useCallback(
     (cellId: CellId, currentContent: string) => {
@@ -61,6 +66,7 @@ export function useTextSync(send: SendFn) {
         // Check cell still exists
         if (!store.getCell(cellId)) {
           lastSentContent.current.delete(cellId);
+          pendingCursorPositions.current.delete(cellId);
           return;
         }
 
@@ -72,11 +78,24 @@ export function useTextSync(send: SendFn) {
         store.textEdit(cellId, diffOp, send);
 
         lastSentContent.current.set(cellId, currentContent);
+
+        const cursorPosition = pendingCursorPositions.current.get(cellId);
+        if (cursorPosition !== undefined) {
+          pendingCursorPositions.current.delete(cellId);
+          reportFocus(cellId, cursorPosition);
+        }
       }, DEBOUNCE_MS);
 
       debounceTimers.current.set(cellId, timer);
     },
-    [send],
+    [send, reportFocus],
+  );
+
+  const noteCursorPosition = useCallback(
+    (cellId: CellId, cursorPosition: number) => {
+      pendingCursorPositions.current.set(cellId, cursorPosition);
+    },
+    [],
   );
 
   const initCell = useCallback((cellId: CellId, content: string) => {
@@ -88,7 +107,8 @@ export function useTextSync(send: SendFn) {
     if (timer) clearTimeout(timer);
     debounceTimers.current.delete(cellId);
     lastSentContent.current.delete(cellId);
+    pendingCursorPositions.current.delete(cellId);
   }, []);
 
-  return { scheduleSync, initCell, removeCell };
+  return { scheduleSync, noteCursorPosition, initCell, removeCell };
 }

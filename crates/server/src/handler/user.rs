@@ -31,7 +31,7 @@ pub async fn handle_join(
                 version: state.notebook.get_version().await,
                 cell_versions: state.notebook.get_cell_versions().await,
                 pending_executions: get_pending_executions(state).await,
-                users: state.users.read().await.values().cloned().collect(),
+                users: state.users_snapshot().await,
                 user_id,
             })
             .await?;
@@ -76,18 +76,12 @@ pub async fn set_focus(
     cursor_position: Option<usize>,
     state: &AppState,
 ) {
-    if let Some(user) = state.users.write().await.get_mut(&user_id) {
-        user.focused_cell = Some(cell_id);
-        user.cursor_position = cursor_position;
-    }
-}
-
-pub async fn clear_focus_for_cell(cell_id: CellId, state: &AppState) {
-    let mut users = state.users.write().await;
-    for user in users.values_mut() {
-        if user.focused_cell == Some(cell_id) {
-            user.focused_cell = None;
-            user.cursor_position = None;
-        }
+    if let Some(cursor_position) = cursor_position {
+        state
+            .focus
+            .set_focus(user_id, cell_id, cursor_position)
+            .await;
+    } else {
+        state.focus.clear_user_focus(user_id).await;
     }
 }

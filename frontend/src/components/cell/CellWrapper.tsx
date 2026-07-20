@@ -15,6 +15,7 @@ interface CellWrapperProps {
   onMoveDown?: () => void;
   onContentChange: (cellId: CellId, content: string) => void;
   onFocusChange: (cellId: CellId, cursorPosition: number) => void;
+  onContentDrivenFocusChange: (cellId: CellId, cursorPosition: number) => void;
   onExecute: (cellId: CellId) => void;
 }
 
@@ -26,6 +27,7 @@ export function CellWrapper({
   onMoveDown,
   onContentChange,
   onFocusChange,
+  onContentDrivenFocusChange,
   onExecute,
 }: CellWrapperProps) {
   const hasFocus = focusedByUsers.length > 0;
@@ -88,6 +90,7 @@ export function CellWrapper({
           cell={cell}
           onContentChange={onContentChange}
           onFocusChange={onFocusChange}
+          onContentDrivenFocusChange={onContentDrivenFocusChange}
           onExecute={onExecute}
           focusedByUsers={focusedByUsers}
         />

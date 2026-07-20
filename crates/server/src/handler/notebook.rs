@@ -81,7 +81,7 @@ pub async fn handle_delete_cell(
     match result {
         Ok(result) => {
             if let NotebookOperationResultData::DeleteCell { cell_id, .. } = result.data {
-                handler::user::clear_focus_for_cell(cell_id, &state).await;
+                state.focus.clear_cell_focus(cell_id).await;
 
                 state
                     .broadcast(
@@ -159,8 +159,10 @@ pub async fn handle_text_edit(
 
     match result {
         Ok(result) => {
-            // TODO: sync focus
-            // handler::user::set_focus(user_id, cell_id, Some(end_position), state).await;
+            state
+                .focus
+                .transform_positions_for_text_edit(cell_id, &result.operation)
+                .await;
 
             state
                 .broadcast(
@@ -209,8 +211,8 @@ async fn send_error_message(
     state: &AppState,
     err: NotebookError,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(user) = state.users.read().await.get(&user_id) {
-        user.tx_channel
+    if let Some(sender) = state.user_sender(user_id).await {
+        sender
             .send(ServerMessage::OperationFailed {
                 context: NotebookStateUpdateContext {
                     version: state.notebook.get_version().await,
@@ -231,8 +233,8 @@ async fn send_text_error_message(
     state: &AppState,
     err: NotebookError,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(user) = state.users.read().await.get(&user_id) {
-        user.tx_channel
+    if let Some(sender) = state.user_sender(user_id).await {
+        sender
             .send(ServerMessage::TextOperationFailed {
                 context: TextStateUpdateContext {
                     cell_version: state.notebook.get_cell_version(cell_id).await,
