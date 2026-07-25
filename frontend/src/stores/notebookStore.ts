@@ -377,10 +377,7 @@ function applyLocalTextOperation(
 }
 
 function editText(state: NotebookState, { cell_id, operation }: TextEditOp) {
-  console.log(operation.toJSON());
-  console.log(state.cells[cell_id].content);
   state.cells[cell_id].content = apply(operation, state.cells[cell_id].content);
-  console.log(state.cells[cell_id].content);
   useUserStore
     .getState()
     .transformfocusPositionsForTextEdit(cell_id, operation);
