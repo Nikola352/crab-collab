@@ -6,14 +6,14 @@ use notebook::conflict_resolver::state::NotebookStateHolder;
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock, mpsc::Sender};
+use tokio::sync::{RwLock, mpsc::Sender};
 
 #[derive(Clone)]
 pub struct AppState {
     pub users: Arc<RwLock<HashMap<UserId, User>>>,
     pub focus: Arc<FocusState>,
     pub notebook: Arc<dyn NotebookStateHolder>,
-    pub execution_queue: Arc<Mutex<ExecutionQueue>>,
+    pub execution_queue: Arc<ExecutionQueue>,
 }
 
 impl AppState {
@@ -25,7 +25,7 @@ impl AppState {
             users: Arc::new(RwLock::new(HashMap::new())),
             focus: Arc::new(FocusState::new()),
             notebook: Arc::new(state_holder),
-            execution_queue: Arc::new(Mutex::new(jupyter_client)),
+            execution_queue: Arc::new(jupyter_client),
         }
     }
 

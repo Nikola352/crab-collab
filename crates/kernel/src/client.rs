@@ -92,7 +92,7 @@ impl JupyterClient {
 
     /// Execute code in a cell.
     /// Returns immediately - outputs arrive via broadcast channel
-    pub async fn execute_code(&mut self, code: &str) -> Result<String, KernelError> {
+    pub async fn execute_code(&self, code: &str) -> Result<String, KernelError> {
         let id = Uuid::new_v4().to_string();
         self.connection
             .send_shell(JupyterMessage::new(
@@ -288,8 +288,7 @@ mod tests {
             return;
         }
 
-        let (mut client, mut output_rx) =
-            JupyterClient::new().await.expect("Failed to launch kernel");
+        let (client, mut output_rx) = JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         let msg_id = client
@@ -316,8 +315,7 @@ mod tests {
             return;
         }
 
-        let (mut client, mut output_rx) =
-            JupyterClient::new().await.expect("Failed to launch kernel");
+        let (client, mut output_rx) = JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         let msg_id = client
@@ -359,8 +357,7 @@ mod tests {
             return;
         }
 
-        let (mut client, mut output_rx) =
-            JupyterClient::new().await.expect("Failed to launch kernel");
+        let (client, mut output_rx) = JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         let msg_id = client
@@ -401,8 +398,7 @@ mod tests {
             return;
         }
 
-        let (mut client, mut output_rx) =
-            JupyterClient::new().await.expect("Failed to launch kernel");
+        let (client, mut output_rx) = JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         let msg_id = client
@@ -443,8 +439,7 @@ mod tests {
             return;
         }
 
-        let (mut client, mut output_rx) =
-            JupyterClient::new().await.expect("Failed to launch kernel");
+        let (client, mut output_rx) = JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         client
@@ -488,8 +483,7 @@ mod tests {
             return;
         }
 
-        let (mut client, mut output_rx) =
-            JupyterClient::new().await.expect("Failed to launch kernel");
+        let (client, mut output_rx) = JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         let msg_id1 = client
@@ -601,8 +595,7 @@ mod tests {
             return;
         }
 
-        let (mut client, mut output_rx) =
-            JupyterClient::new().await.expect("Failed to launch kernel");
+        let (client, mut output_rx) = JupyterClient::new().await.expect("Failed to launch kernel");
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         let msg_id = client

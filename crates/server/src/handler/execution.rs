@@ -21,8 +21,6 @@ pub async fn handle_execute(
     let cell_clone = cell.clone();
     state
         .execution_queue
-        .lock()
-        .await
         .execute(cell_clone, user_id)
         .await
         .map_err(|e| {
@@ -162,8 +160,6 @@ pub async fn handle_output(
 pub async fn get_pending_executions(state: &AppState) -> Vec<Execution> {
     state
         .execution_queue
-        .lock()
-        .await
         .get_pending_executions()
         .await
         .iter()

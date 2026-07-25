@@ -33,29 +33,37 @@ impl ExecutionQueue {
         ))
     }
 
-    pub async fn execute(&mut self, cell: Cell, requester_id: Uuid) -> Result<(), ExecutionError> {
+    pub async fn execute(&self, cell: Cell, requester_id: Uuid) -> Result<(), ExecutionError> {
         {
-            if self.pending_executions.read().await.contains_key(&cell.id) {
+            let mut pending = self.pending_executions.write().await;
+            if pending.contains_key(&cell.id) {
                 return Err(ExecutionError::AlreadyQueued(cell.id));
             }
+
+            pending.insert(
+                cell.id,
+                Execution {
+                    message_id: String::new(),
+                    cell_id: cell.id,
+                    requester_id,
+                    timestamp: chrono::Utc::now(),
+                    status: Pending,
+                },
+            );
         }
 
-        let msg_id = self.jupyter_client.execute_code(&cell.content).await?;
-
-        let execution = Execution {
-            message_id: msg_id,
-            cell_id: cell.id,
-            requester_id,
-            timestamp: chrono::Utc::now(),
-            status: Pending,
-        };
-
-        self.pending_executions
-            .write()
-            .await
-            .insert(cell.id, execution);
-
-        Ok(())
+        match self.jupyter_client.execute_code(&cell.content).await {
+            Ok(msg_id) => {
+                if let Some(execution) = self.pending_executions.write().await.get_mut(&cell.id) {
+                    execution.message_id = msg_id;
+                }
+                Ok(())
+            }
+            Err(err) => {
+                self.pending_executions.write().await.remove(&cell.id);
+                Err(err.into())
+            }
+        }
     }
 
     pub async fn get_pending_executions(&self) -> Vec<Execution> {
