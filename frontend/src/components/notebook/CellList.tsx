@@ -11,6 +11,7 @@ interface CellListProps {
   onMoveCell: (cellId: CellId, toIndex: number) => void;
   onContentChange: (cellId: CellId, content: string) => void;
   onFocusChange: (cellId: CellId, cursorPosition: number) => void;
+  onContentDrivenFocusChange: (cellId: CellId, cursorPosition: number) => void;
   onExecuteCell: (cellId: CellId) => void;
 }
 
@@ -73,6 +74,7 @@ export function CellList({
   onMoveCell,
   onContentChange,
   onFocusChange,
+  onContentDrivenFocusChange,
   onExecuteCell,
 }: CellListProps) {
   const cellIds = useNotebookStore((state) => state.cellOrder);
@@ -127,6 +129,7 @@ export function CellList({
               }
               onContentChange={onContentChange}
               onFocusChange={onFocusChange}
+              onContentDrivenFocusChange={onContentDrivenFocusChange}
               onExecute={onExecuteCell}
             />
             <InsertButton index={i + 1} onInsertCell={onInsertCell} />

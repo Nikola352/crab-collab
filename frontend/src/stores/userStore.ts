@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { CellId } from "../types/cell";
 import type { User, UserId } from "../types/user";
+import { transform_position, type TextOperation } from "../wasm/ot/ot";
 
 interface UserState {
   users: User[];
@@ -9,9 +10,13 @@ interface UserState {
   removeUser: (userId: UserId) => void;
   updateUser: (userId: UserId, updates: Partial<User>) => void;
   clearFocusForCell: (cellId: CellId) => void;
+  transformfocusPositionsForTextEdit: (
+    cellId: CellId,
+    operation: TextOperation,
+  ) => Record<UserId, number>;
 }
 
-export const useUserStore = create<UserState>((set) => ({
+export const useUserStore = create<UserState>((set, get) => ({
   users: [],
   setUsers: (users) => set({ users }),
   addUser: (user) =>
@@ -38,4 +43,32 @@ export const useUserStore = create<UserState>((set) => ({
           : u,
       ),
     })),
+
+  transformfocusPositionsForTextEdit: (
+    cellId: CellId,
+    operation: TextOperation,
+  ) => {
+    const cursorPositions = get().users.reduce(
+      (positions, user) => {
+        if (user.focused_cell === cellId && user.cursor_position != null) {
+          positions[user.id] = transform_position(
+            user.cursor_position,
+            operation,
+          );
+        }
+        return positions;
+      },
+      {} as Record<UserId, number>,
+    );
+
+    set((state) => ({
+      users: state.users.map((user) =>
+        user.id in cursorPositions
+          ? { ...user, cursor_position: cursorPositions[user.id] }
+          : user,
+      ),
+    }));
+
+    return cursorPositions;
+  },
 }));

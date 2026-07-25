@@ -1,3 +1,4 @@
+import type { TextOperation } from "../wasm/ot/ot";
 import type { CellId } from "./cell";
 import type { RequestId } from "./operation";
 
@@ -40,20 +41,11 @@ export interface CellMoveMessage {
   to_index: number;
 }
 
-export interface TextInsertMessage {
-  type: "text_insert";
+export interface TextEditMessage {
+  type: "text_edit";
   context: TextOperationContext;
   cell_id: CellId;
-  start_position: number;
-  text: string;
-}
-
-export interface TextDeleteMessage {
-  type: "text_delete";
-  context: TextOperationContext;
-  cell_id: CellId;
-  start_position: number;
-  end_position: number;
+  operation: TextOperation;
 }
 
 export interface ChangeFocusMessage {
@@ -72,8 +64,7 @@ export type ClientMessage =
   | CellInsertMessage
   | CellDeleteMessage
   | CellMoveMessage
-  | TextInsertMessage
-  | TextDeleteMessage
+  | TextEditMessage
   | ChangeFocusMessage
   | ExecuteCellMessage;
 

@@ -2,11 +2,11 @@ use crate::conflict_resolver::state::NotebookStateHolder;
 use crate::error::NotebookError;
 use crate::error::NotebookError::InvalidIndex;
 use crate::notebook::{Cell, CellId, CellKind, CellOutput, Notebook};
+use crate::operation::NotebookOperation;
 use crate::operation::result::{
     NotebookOperationResult, NotebookOperationResultData, TextOperationResult,
-    TextOperationResultData,
 };
-use crate::operation::{NotebookOperation, TextOperation};
+use ot::text::{TextOperation, apply, transform};
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 
@@ -59,16 +59,7 @@ impl NotebookStateHolder for NaiveStateHolder {
         base_cell_version: u64,
     ) -> Result<TextOperationResult, NotebookError> {
         let mut state = self.inner.write().await;
-        let result = match operation {
-            TextOperation::TextInsert {
-                start_position,
-                text,
-            } => state.apply_text_insert(cell_id, base_cell_version, start_position, text),
-            TextOperation::TextDelete {
-                start_position,
-                end_position,
-            } => state.apply_text_delete(cell_id, base_cell_version, start_position, end_position),
-        }?;
+        let result = state.apply_text_operation(cell_id, base_cell_version, operation)?;
         *state.cell_versions.entry(cell_id).or_insert(0) += 1;
         state
             .text_operation_history
@@ -256,49 +247,32 @@ impl State {
         })
     }
 
-    fn apply_text_insert(
+    fn apply_text_operation(
         &mut self,
         cell_id: CellId,
         base_cell_version: u64,
-        start_position: usize,
-        text: String,
+        operation: TextOperation,
     ) -> Result<TextOperationResult, NotebookError> {
+        let mut real_op = operation;
+
+        match self.text_operation_history.get(&cell_id) {
+            Some(operations) => {
+                let op_results = &operations[base_cell_version as usize..operations.len()];
+                for op_result in op_results {
+                    let transform_result = transform(&op_result.operation, &real_op)?;
+                    real_op = transform_result.b_prime();
+                }
+            }
+            None => {}
+        };
+
         let cell = self.notebook.get_cell_mut(cell_id)?;
-        let clamped_start = start_position.min(cell.content.len());
-        cell.content.insert_str(clamped_start, &text);
-        let end_position = clamped_start + text.len();
+        cell.content = apply(&real_op, &cell.content)?;
 
         Ok(TextOperationResult {
-            version: self.version + 1,
-            data: TextOperationResultData::TextInsert {
-                cell_id,
-                start_position: clamped_start,
-                end_position,
-                text,
-            },
-        })
-    }
-
-    fn apply_text_delete(
-        &mut self,
-        cell_id: CellId,
-        base_cell_version: u64,
-        start_position: usize,
-        end_position: usize,
-    ) -> Result<TextOperationResult, NotebookError> {
-        let cell = self.notebook.get_cell_mut(cell_id)?;
-        let len = cell.content.len();
-        let clamped_start = start_position.min(len);
-        let clamped_end = end_position.min(len);
-        cell.content.drain(clamped_start..clamped_end);
-
-        Ok(TextOperationResult {
-            version: self.version + 1,
-            data: TextOperationResultData::TextDelete {
-                cell_id,
-                start_position: clamped_start,
-                end_position: clamped_end,
-            },
+            version: *self.cell_versions.entry(cell_id).or_default() + 1,
+            cell_id,
+            operation: real_op,
         })
     }
 }

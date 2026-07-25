@@ -6,6 +6,7 @@ import type {
   CellId,
   MarkdownCell as MarkdownCellType,
 } from "../../types/cell";
+import { utf16ToCodepointOffset } from "../../utils/textOffset";
 
 interface MarkdownCellProps {
   cell: MarkdownCellType;
@@ -47,6 +48,15 @@ export const MarkdownCell = memo(function MarkdownCell({
     }
   };
 
+  const reportSelectionFocus = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    onFocusChange(
+      cell.id,
+      utf16ToCodepointOffset(textarea.value, textarea.selectionStart ?? 0),
+    );
+  };
+
   if (isEditing) {
     return (
       <div className="bg-gray-800 rounded-lg border border-gray-600">
@@ -56,12 +66,8 @@ export const MarkdownCell = memo(function MarkdownCell({
           onChange={(e) => setContent(e.target.value)}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
-          onSelect={() =>
-            onFocusChange(cell.id, textareaRef.current?.selectionStart ?? 0)
-          }
-          onFocus={() =>
-            onFocusChange(cell.id, textareaRef.current?.selectionStart ?? 0)
-          }
+          onSelect={reportSelectionFocus}
+          onFocus={reportSelectionFocus}
           className="w-full min-h-32 p-4 bg-transparent text-gray-100 font-mono text-sm resize-y focus:outline-none"
           placeholder="Enter markdown..."
         />

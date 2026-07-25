@@ -1,3 +1,4 @@
+import type { TextOperation } from "../wasm/ot/ot";
 import type { Cell, CellId } from "./cell";
 
 export type RequestId = string & { readonly __brand: "request-id" };
@@ -5,7 +6,7 @@ export type RequestId = string & { readonly __brand: "request-id" };
 export interface Operation {
   id: RequestId;
   version: number;
-  type: "insert" | "delete" | "move" | "text_insert" | "text_delete" | "noop";
+  type: "insert" | "delete" | "move" | "text_edit" | "noop";
 }
 
 export type InsertOp = Operation & {
@@ -19,18 +20,10 @@ export type DeleteOp = Operation & {
   cell_id: CellId;
 };
 
-export type TextInsertOp = Operation & {
-  type: "text_insert";
+export type TextEditOp = Operation & {
+  type: "text_edit";
   cell_id: CellId;
-  start_position: number;
-  text: string;
-};
-
-export type TextDeleteOp = Operation & {
-  type: "text_delete";
-  cell_id: CellId;
-  start_position: number;
-  end_position: number;
+  operation: TextOperation;
 };
 
 export type MoveOp = Operation & {
@@ -51,16 +44,8 @@ export function isDeleteOp(operation: Operation): operation is DeleteOp {
   return operation.type === "delete";
 }
 
-export function isTextInsertOp(
-  operation: Operation,
-): operation is TextInsertOp {
-  return operation.type === "text_insert";
-}
-
-export function isTextDeleteOp(
-  operation: Operation,
-): operation is TextDeleteOp {
-  return operation.type === "text_delete";
+export function isTextEditOp(operation: Operation): operation is TextEditOp {
+  return operation.type === "text_edit";
 }
 
 export function isMoveOp(operation: Operation): operation is MoveOp {

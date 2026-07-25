@@ -1,46 +1,64 @@
 import { useCallback, useRef } from "react";
 import { useNotebookStore } from "../stores/notebookStore";
 import type { CellId } from "../types/cell";
-import type {
-  ClientMessage,
-  TextDeleteMessage,
-  TextInsertMessage,
-} from "../types/client-message";
+import type { ClientMessage } from "../types/client-message";
+import { TextOperation } from "../wasm/ot/ot";
 
 type SendFn = (message: ClientMessage) => void;
 
-const DEBOUNCE_MS = 100;
+const DEBOUNCE_MS = 200;
 
-function computeDiff(oldStr: string, newStr: string) {
+function computeDiff(oldStr: string, newStr: string): TextOperation {
+  // Diff by Unicode codepoint, not UTF-16 code unit
+  const oldChars = Array.from(oldStr);
+  const newChars = Array.from(newStr);
+
   let prefixLen = 0;
   while (
-    prefixLen < oldStr.length &&
-    prefixLen < newStr.length &&
-    oldStr[prefixLen] === newStr[prefixLen]
+    prefixLen < oldChars.length &&
+    prefixLen < newChars.length &&
+    oldChars[prefixLen] === newChars[prefixLen]
   ) {
     prefixLen++;
   }
 
   let suffixLen = 0;
   while (
-    suffixLen < oldStr.length - prefixLen &&
-    suffixLen < newStr.length - prefixLen &&
-    oldStr[oldStr.length - 1 - suffixLen] ===
-      newStr[newStr.length - 1 - suffixLen]
+    suffixLen < oldChars.length - prefixLen &&
+    suffixLen < newChars.length - prefixLen &&
+    oldChars[oldChars.length - 1 - suffixLen] ===
+      newChars[newChars.length - 1 - suffixLen]
   ) {
     suffixLen++;
   }
 
-  return {
-    deleteStart: prefixLen,
-    deleteEnd: oldStr.length - suffixLen,
-    insertText: newStr.slice(prefixLen, newStr.length - suffixLen),
-  };
+  const operation = TextOperation.default();
+  if (prefixLen > 0) {
+    operation.retain(prefixLen);
+  }
+  if (prefixLen + suffixLen < oldChars.length) {
+    operation.delete(oldChars.length - (prefixLen + suffixLen));
+  }
+  if (prefixLen + suffixLen < newChars.length) {
+    operation.insert(
+      newChars.slice(prefixLen, newChars.length - suffixLen).join(""),
+    );
+  }
+  if (suffixLen > 0) {
+    operation.retain(suffixLen);
+  }
+
+  return operation;
 }
 
-export function useTextSync(send: SendFn) {
+type ReportFocusFn = (cellId: CellId, cursorPosition: number) => void;
+
+export function useTextSync(send: SendFn, reportFocus: ReportFocusFn) {
   const lastSentContent = useRef<Map<CellId, string>>(new Map());
   const debounceTimers = useRef<Map<CellId, number>>(new Map());
+  // Cursor positions from edits (typing/paste/undo), held back so they never
+  // reach other clients ahead of the text_edit that produced them
+  const pendingCursorPositions = useRef<Map<CellId, number>>(new Map());
 
   const scheduleSync = useCallback(
     (cellId: CellId, currentContent: string) => {
@@ -54,60 +72,36 @@ export function useTextSync(send: SendFn) {
         // Check cell still exists
         if (!store.getCell(cellId)) {
           lastSentContent.current.delete(cellId);
+          pendingCursorPositions.current.delete(cellId);
           return;
         }
 
         const oldContent = lastSentContent.current.get(cellId) ?? "";
         if (currentContent === oldContent) return;
 
-        const diff = computeDiff(oldContent, currentContent);
+        const diffOp = computeDiff(oldContent, currentContent);
 
-        if (diff.deleteEnd > diff.deleteStart) {
-          const requestId = store.textDelete(
-            cellId,
-            diff.deleteStart,
-            diff.deleteEnd,
-          );
-          send({
-            type: "text_delete",
-            context: {
-              base_cell_version: useNotebookStore
-                .getState()
-                .getCellVersion(cellId),
-              request_id: requestId,
-            },
-            cell_id: cellId,
-            start_position: diff.deleteStart,
-            end_position: diff.deleteEnd,
-          } as TextDeleteMessage);
-        }
-
-        if (diff.insertText.length > 0) {
-          const requestId = store.textInsert(
-            cellId,
-            diff.deleteStart,
-            diff.insertText,
-          );
-          send({
-            type: "text_insert",
-            context: {
-              base_cell_version: useNotebookStore
-                .getState()
-                .getCellVersion(cellId),
-              request_id: requestId,
-            },
-            cell_id: cellId,
-            start_position: diff.deleteStart,
-            text: diff.insertText,
-          } as TextInsertMessage);
-        }
+        store.textEdit(cellId, diffOp, send);
 
         lastSentContent.current.set(cellId, currentContent);
+
+        const cursorPosition = pendingCursorPositions.current.get(cellId);
+        if (cursorPosition !== undefined) {
+          pendingCursorPositions.current.delete(cellId);
+          reportFocus(cellId, cursorPosition);
+        }
       }, DEBOUNCE_MS);
 
       debounceTimers.current.set(cellId, timer);
     },
-    [send],
+    [send, reportFocus],
+  );
+
+  const noteCursorPosition = useCallback(
+    (cellId: CellId, cursorPosition: number) => {
+      pendingCursorPositions.current.set(cellId, cursorPosition);
+    },
+    [],
   );
 
   const initCell = useCallback((cellId: CellId, content: string) => {
@@ -119,7 +113,8 @@ export function useTextSync(send: SendFn) {
     if (timer) clearTimeout(timer);
     debounceTimers.current.delete(cellId);
     lastSentContent.current.delete(cellId);
+    pendingCursorPositions.current.delete(cellId);
   }, []);
 
-  return { scheduleSync, initCell, removeCell };
+  return { scheduleSync, noteCursorPosition, initCell, removeCell };
 }
