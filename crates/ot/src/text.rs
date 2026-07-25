@@ -116,7 +116,7 @@ pub fn transform_position(position: usize, operation: &TextOperation) -> usize {
                 pos -= *len as usize;
             }
             Operation::Insert(text) => {
-                new_pos += text.len();
+                new_pos += text.chars().count();
             }
             Operation::Delete(len) => {
                 new_pos -= min(pos, *len as usize);

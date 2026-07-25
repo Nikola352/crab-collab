@@ -9,21 +9,25 @@ type SendFn = (message: ClientMessage) => void;
 const DEBOUNCE_MS = 200;
 
 function computeDiff(oldStr: string, newStr: string): TextOperation {
+  // Diff by Unicode codepoint, not UTF-16 code unit
+  const oldChars = Array.from(oldStr);
+  const newChars = Array.from(newStr);
+
   let prefixLen = 0;
   while (
-    prefixLen < oldStr.length &&
-    prefixLen < newStr.length &&
-    oldStr[prefixLen] === newStr[prefixLen]
+    prefixLen < oldChars.length &&
+    prefixLen < newChars.length &&
+    oldChars[prefixLen] === newChars[prefixLen]
   ) {
     prefixLen++;
   }
 
   let suffixLen = 0;
   while (
-    suffixLen < oldStr.length - prefixLen &&
-    suffixLen < newStr.length - prefixLen &&
-    oldStr[oldStr.length - 1 - suffixLen] ===
-      newStr[newStr.length - 1 - suffixLen]
+    suffixLen < oldChars.length - prefixLen &&
+    suffixLen < newChars.length - prefixLen &&
+    oldChars[oldChars.length - 1 - suffixLen] ===
+      newChars[newChars.length - 1 - suffixLen]
   ) {
     suffixLen++;
   }
@@ -32,11 +36,13 @@ function computeDiff(oldStr: string, newStr: string): TextOperation {
   if (prefixLen > 0) {
     operation.retain(prefixLen);
   }
-  if (prefixLen + suffixLen < oldStr.length) {
-    operation.delete(oldStr.length - (prefixLen + suffixLen));
+  if (prefixLen + suffixLen < oldChars.length) {
+    operation.delete(oldChars.length - (prefixLen + suffixLen));
   }
-  if (prefixLen + suffixLen < newStr.length) {
-    operation.insert(newStr.slice(prefixLen, newStr.length - suffixLen));
+  if (prefixLen + suffixLen < newChars.length) {
+    operation.insert(
+      newChars.slice(prefixLen, newChars.length - suffixLen).join(""),
+    );
   }
   if (suffixLen > 0) {
     operation.retain(suffixLen);

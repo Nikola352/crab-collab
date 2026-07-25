@@ -4,6 +4,10 @@ import { KeyCode, KeyMod, editor } from "monaco-editor";
 import type { CellId, CodeCell as CodeCellType } from "../../types/cell";
 import type { User } from "../../types/user";
 import { getUserColorIndex } from "../../utils/userColors";
+import {
+  codepointToUtf16Offset,
+  utf16ToCodepointOffset,
+} from "../../utils/textOffset";
 import { OutputArea } from "./OutputArea";
 
 function buildRemoteCursorDecorations(
@@ -13,7 +17,11 @@ function buildRemoteCursorDecorations(
   return users
     .filter((u) => u.cursor_position != null)
     .map((user) => {
-      const position = model.getPositionAt(user.cursor_position!);
+      const utf16Offset = codepointToUtf16Offset(
+        model.getValue(),
+        user.cursor_position!,
+      );
+      const position = model.getPositionAt(utf16Offset);
       const colorIndex = getUserColorIndex(user.id);
       return {
         range: {
@@ -80,15 +88,20 @@ export const CodeCell = memo(function CodeCell({
 
       ed.onDidChangeCursorPosition((e) => {
         if (isExternalContentUpdateRef.current) return;
-        const offset = ed.getModel()?.getOffsetAt(e.position);
-        if (offset === undefined) return;
+        const cursorModel = ed.getModel();
+        const offset = cursorModel?.getOffsetAt(e.position);
+        if (!cursorModel || offset === undefined) return;
+        const codepointOffset = utf16ToCodepointOffset(
+          cursorModel.getValue(),
+          offset,
+        );
 
         // Explicit = pure navigation (arrow keys, clicks, Home/End)
         // Anything else (typing, paste, undo/redo) moved the cursor as a side effect of an edit
         if (e.reason === editor.CursorChangeReason.Explicit) {
-          onFocusChange(cell.id, offset);
+          onFocusChange(cell.id, codepointOffset);
         } else {
-          onContentDrivenFocusChange(cell.id, offset);
+          onContentDrivenFocusChange(cell.id, codepointOffset);
         }
       });
 
@@ -96,7 +109,11 @@ export const CodeCell = memo(function CodeCell({
         const model = ed.getModel();
         const pos = ed.getPosition();
         if (model && pos) {
-          onFocusChange(cell.id, model.getOffsetAt(pos));
+          const codepointOffset = utf16ToCodepointOffset(
+            model.getValue(),
+            model.getOffsetAt(pos),
+          );
+          onFocusChange(cell.id, codepointOffset);
         }
       });
 
