@@ -46,6 +46,7 @@ interface CodeCellProps {
   onContentDrivenFocusChange: (cellId: CellId, cursorPosition: number) => void;
   onExecute: (cellId: CellId) => void;
   focusedByUsers: User[];
+  myCursorPosition: number | null;
 }
 
 export const CodeCell = memo(function CodeCell({
@@ -55,6 +56,7 @@ export const CodeCell = memo(function CodeCell({
   onContentDrivenFocusChange,
   onExecute,
   focusedByUsers,
+  myCursorPosition,
 }: CodeCellProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(
@@ -63,15 +65,32 @@ export const CodeCell = memo(function CodeCell({
 
   const lastSeenContentRef = useRef(cell.content);
   const isExternalContentUpdateRef = useRef(false);
+  const pendingCursorRestoreRef = useRef(false);
   useLayoutEffect(() => {
     if (cell.content !== lastSeenContentRef.current) {
       isExternalContentUpdateRef.current = true;
+      const monacoValue = editorRef.current?.getModel()?.getValue();
+      pendingCursorRestoreRef.current =
+        monacoValue !== undefined && monacoValue !== cell.content;
     }
   });
   useEffect(() => {
     lastSeenContentRef.current = cell.content;
     isExternalContentUpdateRef.current = false;
-  }, [cell.content]);
+
+    if (pendingCursorRestoreRef.current) {
+      pendingCursorRestoreRef.current = false;
+      const ed = editorRef.current;
+      const model = ed?.getModel();
+      if (ed && model && myCursorPosition != null) {
+        const utf16Offset = codepointToUtf16Offset(
+          cell.content,
+          myCursorPosition,
+        );
+        ed.setPosition(model.getPositionAt(utf16Offset));
+      }
+    }
+  }, [cell.content, myCursorPosition]);
 
   const setContent = useCallback(
     (content: string) => onContentChange(cell.id, content),

@@ -10,6 +10,7 @@ import { useNotebookStore } from "../../stores/notebookStore";
 interface CellWrapperProps {
   cellId: string;
   focusedByUsers: User[];
+  myCursorPosition: number | null;
   onDelete: () => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
@@ -22,6 +23,7 @@ interface CellWrapperProps {
 export function CellWrapper({
   cellId,
   focusedByUsers,
+  myCursorPosition,
   onDelete,
   onMoveUp,
   onMoveDown,
@@ -93,6 +95,7 @@ export function CellWrapper({
           onContentDrivenFocusChange={onContentDrivenFocusChange}
           onExecute={onExecute}
           focusedByUsers={focusedByUsers}
+          myCursorPosition={myCursorPosition}
         />
       ) : (
         <MarkdownCell

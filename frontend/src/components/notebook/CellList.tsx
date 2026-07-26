@@ -112,12 +112,17 @@ export function CellList({
         const focusedByUsers = users.filter(
           (user) => user.focused_cell === id && user.id !== currentUserId,
         );
+        const myCursorPosition =
+          users.find(
+            (user) => user.id === currentUserId && user.focused_cell === id,
+          )?.cursor_position ?? null;
 
         return (
           <div key={id} style={{ order: i + 1 }}>
             <CellWrapper
               cellId={id}
               focusedByUsers={focusedByUsers}
+              myCursorPosition={myCursorPosition}
               onDelete={() => onDeleteCell(id as CellId)}
               onMoveUp={
                 i > 0 ? () => onMoveCell(id as CellId, i - 1) : undefined

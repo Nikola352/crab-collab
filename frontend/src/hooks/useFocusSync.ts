@@ -1,6 +1,8 @@
 import { useCallback, useRef } from "react";
 import type { CellId } from "../types/cell";
 import type { ClientMessage } from "../types/client-message";
+import { useSessionStore } from "../stores/sessionStore";
+import { useUserStore } from "../stores/userStore";
 
 type SendFn = (message: ClientMessage) => void;
 
@@ -10,6 +12,14 @@ export function useFocusSync(send: SendFn) {
 
   const sendFocusChange = useCallback(
     (cellId: CellId, cursorPosition: number) => {
+      const ownUserId = useSessionStore.getState().userId;
+      if (ownUserId) {
+        useUserStore.getState().updateUser(ownUserId, {
+          focused_cell: cellId,
+          cursor_position: cursorPosition,
+        });
+      }
+
       const last = lastSent.current;
       if (last && last.cellId === cellId && last.position === cursorPosition) {
         return;
