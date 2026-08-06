@@ -1,4 +1,5 @@
 use crate::notebook::{Cell, CellId};
+use fractional_index::FractionalIndex;
 use ot::text::TextOperation;
 
 #[derive(Debug, Clone)]
@@ -10,17 +11,15 @@ pub struct NotebookOperationResult {
 #[derive(Debug, Clone)]
 pub enum NotebookOperationResultData {
     InsertCell {
-        position: usize,
+        index: FractionalIndex,
         cell: Cell,
     },
     DeleteCell {
         cell_id: CellId,
-        from_index: usize,
     },
     MoveCell {
         cell_id: CellId,
-        from_index: usize,
-        to_index: usize,
+        to_index: FractionalIndex,
     },
 }
 

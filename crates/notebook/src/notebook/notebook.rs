@@ -12,6 +12,10 @@ impl Notebook {
         Self { cells: Vec::new() }
     }
 
+    pub fn new_from_cells(cells: Vec<Cell>) -> Self {
+        Notebook { cells }
+    }
+
     pub fn cells(&self) -> &[Cell] {
         &self.cells
     }

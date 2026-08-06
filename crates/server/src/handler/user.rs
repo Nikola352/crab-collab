@@ -28,6 +28,7 @@ pub async fn handle_join(
         sender
             .send(ServerMessage::FullState {
                 notebook: state.notebook.get_notebook().await.clone(),
+                cell_metadata: state.notebook.get_cell_metadata().await,
                 version: state.notebook.get_version().await,
                 cell_versions: state.notebook.get_cell_versions().await,
                 pending_executions: get_pending_executions(state).await,

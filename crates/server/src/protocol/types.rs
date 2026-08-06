@@ -14,9 +14,6 @@ pub type RequestId = Uuid;
 /// Context sent with certain (cell-level) operations to encapsulate clients current state
 #[derive(Debug, Clone, Deserialize)]
 pub struct NotebookOperationContext {
-    /// Document version to which the operation was issued
-    pub base_version: u64,
-
     /// Client-generated request id used for optimistic updates
     pub request_id: RequestId,
 }
@@ -24,9 +21,6 @@ pub struct NotebookOperationContext {
 /// Server context sent with some operation's broadcasts to allow clients to correctly update their state
 #[derive(Debug, Clone, Serialize)]
 pub struct NotebookStateUpdateContext {
-    /// Current version of the document after the operation
-    pub version: u64,
-
     /// User who requested the operation
     pub user_id: UserId,
 
@@ -37,7 +31,7 @@ pub struct NotebookStateUpdateContext {
 /// Context sent with certain text operations to encapsulate clients current state
 #[derive(Debug, Clone, Deserialize)]
 pub struct TextOperationContext {
-    /// Document version to which the operation was issued
+    /// Cell content version to which the operation was issued
     pub base_cell_version: u64,
 
     pub request_id: RequestId,
@@ -45,6 +39,7 @@ pub struct TextOperationContext {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TextStateUpdateContext {
+    /// Current version of the cell content after the operation
     pub cell_version: u64,
 
     /// User who requested the operation

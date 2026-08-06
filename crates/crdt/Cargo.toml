@@ -1,0 +1,15 @@
+[package]
+name = "crdt"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+fractional_index = { workspace = true }
+wasm-bindgen = { version = "0.2.126", optional = true }
+serde-wasm-bindgen = { version = "0.6.5", optional = true }
+
+[features]
+wasm = ["dep:wasm-bindgen", "dep:serde-wasm-bindgen"]
