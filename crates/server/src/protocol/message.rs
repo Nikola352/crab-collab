@@ -2,6 +2,7 @@ use crate::protocol::types::{
     CellId, Execution, NotebookOperationContext, NotebookStateUpdateContext, TextOperationContext,
     TextStateUpdateContext, User, UserId,
 };
+use fractional_index::FractionalIndex;
 use notebook::notebook::{Cell, Notebook};
 use ot::text::TextOperation;
 use serde::{Deserialize, Serialize};
@@ -22,7 +23,8 @@ pub enum ClientMessage {
     },
     CellInsert {
         context: NotebookOperationContext,
-        index: usize,
+        #[serde(with = "fractional_index::stringify")]
+        index: FractionalIndex,
         cell_id: CellId,
         cell_type: CellType,
         content: Option<String>,
@@ -34,7 +36,8 @@ pub enum ClientMessage {
     CellMove {
         context: NotebookOperationContext,
         cell_id: CellId,
-        to_index: usize,
+        #[serde(with = "fractional_index::stringify")]
+        to_index: FractionalIndex,
     },
     TextEdit {
         context: TextOperationContext,
@@ -62,6 +65,7 @@ pub enum ServerMessage {
     },
     FullState {
         notebook: Notebook,
+        cell_metadata: HashMap<CellId, String>,
         version: u64,
         cell_versions: HashMap<CellId, u64>,
         pending_executions: Vec<Execution>,
@@ -70,7 +74,8 @@ pub enum ServerMessage {
     },
     CellInsert {
         context: NotebookStateUpdateContext,
-        index: usize,
+        #[serde(with = "fractional_index::stringify")]
+        index: FractionalIndex,
         cell: Cell,
     },
     CellDelete {
@@ -80,8 +85,8 @@ pub enum ServerMessage {
     CellMove {
         context: NotebookStateUpdateContext,
         cell_id: CellId,
-        from_index: usize,
-        to_index: usize,
+        #[serde(with = "fractional_index::stringify")]  
+        to_index: FractionalIndex,
     },
 
     TextEdit {

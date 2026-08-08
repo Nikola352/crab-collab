@@ -1,19 +1,20 @@
 use crate::error::NotebookError;
 use crate::notebook::{CellId, CellOutput, Notebook};
+use crate::operation::NotebookOperation;
 use crate::operation::result::{NotebookOperationResult, TextOperationResult};
-use crate::operation::{NotebookOperation};
-use std::collections::HashMap;
 use ot::text::TextOperation;
+use std::collections::HashMap;
 
 #[async_trait::async_trait]
 pub trait NotebookStateHolder: Send + Sync {
     async fn apply_cell_operation(
         &self,
         operation: NotebookOperation,
-        base_version: u64,
     ) -> Result<NotebookOperationResult, NotebookError>;
 
     async fn get_notebook(&self) -> Notebook;
+
+    async fn get_cell_metadata(&self) -> HashMap<CellId, String>;
 
     async fn get_version(&self) -> u64;
 

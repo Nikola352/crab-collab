@@ -101,7 +101,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
         }
       });
       setSession(msg.user_id, userName);
-      setCells(cells);
+      setCells(cells, msg.cell_metadata);
       setVersion(msg.version);
       if (msg.cell_versions) {
         setCellVersions(msg.cell_versions);
@@ -370,7 +370,11 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
   );
 
   const handleInsertCell = useCallback(
-    (index: number, cellType: CellType) => {
+    (
+      prevId: CellId | undefined,
+      nextId: CellId | undefined,
+      cellType: CellType,
+    ) => {
       const cellId = uuidv4() as CellId;
       const cell: Cell =
         cellType === "code"
@@ -388,16 +392,16 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
               content: "",
             };
 
-      const requestId = insertCellStore(cell, index);
+      const op = insertCellStore(cell, prevId, nextId);
       textSync.initCell(cellId, "");
 
       send({
         type: "cell_insert",
         context: {
           base_version: useNotebookStore.getState().version,
-          request_id: requestId,
+          request_id: op.id,
         },
-        index,
+        index: op.index,
         cell_id: cellId,
         cell_type: cellType,
       });
@@ -415,13 +419,13 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
       const cell = useNotebookStore.getState().getCell(cellId);
       if (!cell) return;
 
-      const requestId = removeCellStore(cell);
+      const op = removeCellStore(cell);
 
       send({
         type: "cell_delete",
         context: {
           base_version: useNotebookStore.getState().version,
-          request_id: requestId,
+          request_id: op.id,
         },
         cell_id: cellId,
       });
@@ -432,17 +436,17 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
   );
 
   const handleMoveCell = useCallback(
-    (cellId: CellId, toIndex: number) => {
-      const requestId = moveCellStore(cellId, toIndex);
+    (cellId: CellId, prevId?: CellId, nextId?: CellId) => {
+      const op = moveCellStore(cellId, prevId, nextId);
 
       send({
         type: "cell_move",
         context: {
           base_version: useNotebookStore.getState().version,
-          request_id: requestId,
+          request_id: op.id,
         },
         cell_id: cellId,
-        to_index: toIndex,
+        to_index: op.to_index,
       });
     },
     [moveCellStore, send],

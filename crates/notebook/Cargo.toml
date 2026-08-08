@@ -8,7 +8,9 @@ tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
+fractional_index = { workspace = true }
 
 async-trait = "0.1.89"
 
 ot = { path = "../ot" }
+crdt = { path = "../crdt" }

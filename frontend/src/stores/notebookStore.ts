@@ -12,7 +12,6 @@ import {
   type Operation,
   type RequestId,
   type TextEditOp,
-  isTextEditOp,
 } from "../types/operation";
 
 import {
@@ -24,6 +23,8 @@ import {
 import { useUserStore } from "./userStore";
 import { apply, transform, type TextOperation } from "../wasm/ot/ot";
 import type { ClientMessage, TextEditMessage } from "../types/client-message";
+import { FractionalList } from "../wasm/crdt/crdt";
+import { indexBetween, type CellIndex } from "../types/cell-index";
 
 type SendFn = (message: ClientMessage) => void;
 
@@ -31,18 +32,9 @@ interface NotebookState {
   version: number;
   cellVersions: Record<string, number>;
   cells: Record<string, Cell>;
-  cellOrder: string[];
-
-  // last state that was fully confirmed by the server or null if all updates are confirmed
-  confirmedState: {
-    cells: Record<string, Cell>;
-    cellOrder: string[];
-  };
+  cellOrder: FractionalList;
 
   // optimistic updates applied to the UI, but not confirmed by the server
-  unconfirmedOperations: string[];
-
-  // operations received from the server, but not yet applied to UI
   pendingOperations: Operation[];
 
   // optimistic updates applied to the UI, but not yet sent to the server
@@ -57,10 +49,10 @@ interface NotebookState {
   setCellVersion: (cellId: string, version: number) => void;
   getCell: (id: string) => Cell | undefined;
   getAllCells: () => Cell[];
-  setCells: (cells: Cell[]) => void;
-  insertCell: (cell: Cell, index: number) => RequestId;
-  removeCell: (cell: Cell) => RequestId;
-  moveCell: (cellId: string, toIndex: number) => RequestId;
+  setCells: (cells: Cell[], cell_metadata?: Record<string, string>) => void;
+  insertCell: (cell: Cell, prevId?: CellId, nextId?: CellId) => InsertOp;
+  removeCell: (cell: Cell) => DeleteOp;
+  moveCell: (cellId: string, prevId?: CellId, nextId?: CellId) => MoveOp;
   textEdit: (cellId: string, operation: TextOperation, send: SendFn) => void;
   updateCellOutput: (cellId: string, outputs: CellOutput[]) => void;
   clearCellOutputs: (cellId: string) => void;
@@ -83,7 +75,7 @@ export const useNotebookStore = create<NotebookState>()(
     version: 0,
     cellVersions: {},
     cells: {},
-    cellOrder: [],
+    cellOrder: new FractionalList(),
 
     confirmedState: {
       cells: {},
@@ -108,12 +100,18 @@ export const useNotebookStore = create<NotebookState>()(
 
     getCell: (id) => get().cells[id],
 
-    getAllCells: () => get().cellOrder.map((id) => get().cells[id]),
+    getAllCells: () =>
+      get()
+        .cellOrder.getOrdered()
+        .map((id) => get().cells[id]),
 
-    setCells: (cells) =>
+    setCells: (cells, cell_metadata) =>
       set({
         cells: cells.reduce((acc, cell) => ({ ...acc, [cell.id]: cell }), {}),
-        cellOrder: cells.map((c) => c.id),
+        cellOrder: FractionalList.from(
+          cells.map((c) => c.id),
+          cell_metadata,
+        ),
         pendingTextOperations: cells.reduce(
           (acc, cell) => ({ ...acc, [cell.id]: [] }),
           {},
@@ -138,46 +136,64 @@ export const useNotebookStore = create<NotebookState>()(
       });
     },
 
-    insertCell: (cell: Cell, index: number) => {
+    insertCell: (cell: Cell, prevId?: CellId, nextId?: CellId) => {
       const id = uuidv4() as RequestId;
+      let operation: InsertOp | undefined;
       set((state) => {
+        const prev =
+          prevId && (state.cellOrder.getIndex(prevId) as CellIndex | undefined);
+        const nxt =
+          nextId && (state.cellOrder.getIndex(nextId) as CellIndex | undefined);
+        const index = indexBetween(prev, nxt);
         const op = {
           id,
           version: state.version,
+          type: "insert",
           cell,
           index,
         } as InsertOp;
+        operation = op;
         applyLocalOperation(state, op);
       });
-      return id;
+      return operation!;
     },
 
     removeCell: (cell: Cell) => {
       const id = uuidv4() as RequestId;
+      let operation: DeleteOp | undefined;
       set((state) => {
         const op = {
           id,
           version: state.version,
+          type: "delete",
           cell_id: cell.id,
         } as DeleteOp;
+        operation = op;
         applyLocalOperation(state, op);
       });
-      return id;
+      return operation!;
     },
 
-    moveCell: (cellId: string, toIndex: number) => {
+    moveCell: (cellId: string, prevId?: CellId, nextId?: CellId) => {
       const id = uuidv4() as RequestId;
+      let operation: MoveOp | undefined;
       set((state) => {
+        const prev =
+          prevId && (state.cellOrder.getIndex(prevId) as CellIndex | undefined);
+        const nxt =
+          nextId && (state.cellOrder.getIndex(nextId) as CellIndex | undefined);
+        const index = indexBetween(prev, nxt);
         const op = {
           id,
           version: state.version,
           type: "move",
           cell_id: cellId,
-          to_index: toIndex,
+          to_index: index,
         } as MoveOp;
+        operation = op;
         applyLocalOperation(state, op);
       });
-      return id;
+      return operation!;
     },
 
     updateCellOutput: (cellId, outputs) =>
@@ -224,21 +240,44 @@ export const useNotebookStore = create<NotebookState>()(
 
     receiveServerOperation: (operation, isOwn) =>
       set((state) => {
-        if (state.unconfirmedOperations.length == 0) {
-          handleOperation(state, operation);
-          updateVersion(state, operation);
-          return;
-        }
+        let new_index: CellIndex | undefined;
+        if (isInsertOp(operation)) new_index = operation.index;
+        else if (isMoveOp(operation)) new_index = operation.to_index;
 
-        state.pendingOperations.push(operation);
+        if (isOwn) {
+          const pendingOp = state.pendingOperations.at(0);
+          const [pending_index, pending_id] = (pendingOp
+            ? extract_idx_and_id(pendingOp)
+            : null) ?? [undefined, undefined];
 
-        if (
-          isOwn &&
-          operation.id ===
-            state.unconfirmedOperations[state.unconfirmedOperations.length - 1]
-        ) {
-          // last unconfirmed operation has arrived
-          syncWithServer(state);
+          if (new_index && pending_index && new_index != pending_index) {
+            state.cellOrder.moveTo(pending_id!, new_index);
+          }
+
+          state.pendingOperations.splice(0, 1);
+        } else {
+          // not own
+          const pendingOp = state.pendingOperations
+            .filter((op) => isInsertOp(op) || isMoveOp(op))
+            .find(
+              (op) =>
+                (isInsertOp(op) && op.index == new_index) ||
+                (isMoveOp(op) && op.to_index == new_index),
+            );
+
+          const [pending_index, pending_id] = (pendingOp
+            ? extract_idx_and_id(pendingOp)
+            : null) ?? [undefined, undefined];
+
+          if (pending_index && pending_id) {
+            state.cellOrder.delete(pending_id);
+            handleOperation(state, operation);
+            // insert at taken position will actually insert forward
+            state.cellOrder.insertAt(pending_id, pending_index);
+            return;
+          } else {
+            handleOperation(state, operation);
+          }
         }
       }),
 
@@ -287,48 +326,8 @@ export const useNotebookStore = create<NotebookState>()(
 );
 
 function applyLocalOperation(state: NotebookState, operation: Operation) {
-  if (state.unconfirmedOperations.length == 0) {
-    // TODO: analyze this further
-    state.confirmedState.cells = JSON.parse(JSON.stringify(state.cells));
-    state.confirmedState.cellOrder = JSON.parse(
-      JSON.stringify(state.cellOrder),
-    );
-  }
   handleOperation(state, operation);
-  state.unconfirmedOperations.push(operation.id);
-}
-
-function syncWithServer(state: NotebookState) {
-  if (state.pendingOperations.length === 0) {
-    state.confirmedState.cells = state.cells;
-    state.confirmedState.cellOrder = state.cellOrder;
-    return;
-  }
-
-  // roll back
-  state.cells = state.confirmedState.cells;
-  state.cellOrder = state.confirmedState.cellOrder;
-
-  // apply all ops and update the appropriate version counter per op
-  for (const op of state.pendingOperations) {
-    handleOperation(state, op);
-    updateVersion(state, op);
-  }
-
-  state.pendingOperations = [];
-  state.unconfirmedOperations = [];
-}
-
-function updateVersion(state: NotebookState, operation: Operation) {
-  if (isTextEditOp(operation)) {
-    state.cellVersions[operation.cell_id] = operation.version;
-  } else if (
-    isInsertOp(operation) ||
-    isDeleteOp(operation) ||
-    isMoveOp(operation)
-  ) {
-    state.version = operation.version;
-  }
+  state.pendingOperations.push(operation);
 }
 
 function handleOperation(state: NotebookState, operation: Operation) {
@@ -341,27 +340,18 @@ function insertCell(state: NotebookState, { cell, index }: InsertOp) {
   state.cells[cell.id] = cell;
   state.cellVersions[cell.id] = 0;
   state.pendingTextOperations[cell.id] = [];
-
-  if (index !== undefined && index >= 0 && index <= state.cellOrder.length) {
-    state.cellOrder.splice(index, 0, cell.id);
-  } else {
-    state.cellOrder.push(cell.id);
-  }
+  state.cellOrder.insertAt(cell.id, index);
 }
 
 function deleteCell(state: NotebookState, { cell_id }: DeleteOp) {
   delete state.cells[cell_id];
   delete state.cellVersions[cell_id];
   delete state.pendingTextOperations[cell_id];
-  state.cellOrder = state.cellOrder.filter((id) => id !== cell_id);
+  state.cellOrder.delete(cell_id);
 }
 
 function moveCellInOrder(state: NotebookState, { cell_id, to_index }: MoveOp) {
-  const currentIndex = state.cellOrder.indexOf(cell_id);
-  if (currentIndex === -1) return;
-  state.cellOrder.splice(currentIndex, 1);
-  const clamped = Math.min(to_index, state.cellOrder.length);
-  state.cellOrder.splice(clamped, 0, cell_id);
+  state.cellOrder.moveTo(cell_id, to_index);
 }
 
 function applyLocalTextOperation(
@@ -403,4 +393,14 @@ function pushTextOpToServer(
     cell_id: cellId,
     operation: operation.operation,
   } as TextEditMessage);
+}
+
+function extract_idx_and_id(
+  operation: Operation,
+): [CellIndex, CellId] | undefined {
+  if (operation && isInsertOp(operation)) {
+    return [operation.index, operation.cell.id];
+  } else if (operation && isMoveOp(operation)) {
+    return [operation.to_index, operation.cell_id];
+  }
 }

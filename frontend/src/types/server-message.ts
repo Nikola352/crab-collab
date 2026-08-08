@@ -1,4 +1,5 @@
 import type { Cell, CellId } from "./cell";
+import type { CellIndex } from "./cell-index";
 import type { Execution } from "./execution";
 import type { Notebook } from "./notebook";
 import type { RequestId } from "./operation";
@@ -22,6 +23,7 @@ export interface FullStateMessage {
   type: "full_state";
   user_id: UserId;
   notebook: Notebook;
+  cell_metadata: Record<string, string>;
   version: number;
   cell_versions: Record<string, number>;
   pending_executions: Execution[];
@@ -44,7 +46,7 @@ export interface TextStateUpdateContext {
 export interface CellInsertMessage {
   type: "cell_insert";
   context: NotebookStateUpdateContext;
-  index: number;
+  index: CellIndex;
   cell: Cell;
 }
 
@@ -58,8 +60,7 @@ export interface CellMoveMessage {
   type: "cell_move";
   context: NotebookStateUpdateContext;
   cell_id: CellId;
-  from_index: number;
-  to_index: number;
+  to_index: CellIndex;
 }
 
 export interface TextEditMessage {

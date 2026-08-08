@@ -1,14 +1,19 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNotebookStore } from "../../stores/notebookStore";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useUserStore } from "../../stores/userStore";
 import { CellWrapper } from "../cell/CellWrapper";
 import type { CellId, CellType } from "../../types/cell";
+import { useShallow } from "zustand/shallow";
 
 interface CellListProps {
-  onInsertCell: (index: number, cellType: CellType) => void;
+  onInsertCell: (
+    prevId: CellId | undefined,
+    nextId: CellId | undefined,
+    cellType: CellType,
+  ) => void;
   onDeleteCell: (cellId: CellId) => void;
-  onMoveCell: (cellId: CellId, toIndex: number) => void;
+  onMoveCell: (cellId: CellId, prevId?: CellId, nextId?: CellId) => void;
   onContentChange: (cellId: CellId, content: string) => void;
   onFocusChange: (cellId: CellId, cursorPosition: number) => void;
   onContentDrivenFocusChange: (cellId: CellId, cursorPosition: number) => void;
@@ -77,7 +82,9 @@ export function CellList({
   onContentDrivenFocusChange,
   onExecuteCell,
 }: CellListProps) {
-  const cellIds = useNotebookStore((state) => state.cellOrder);
+  const cellIds = useNotebookStore(
+    useShallow((state) => state.cellOrder.getOrdered()),
+  );
   const users = useUserStore((state) => state.users);
   const currentUserId = useSessionStore((state) => state.userId);
 
@@ -88,6 +95,38 @@ export function CellList({
     return map;
   }, [cellIds]);
 
+  const cellsAroundIdx = useMemo(() => {
+    const map = new Map<number, (string | undefined)[]>();
+
+    if (cellIds.length === 0) {
+      map.set(0, [undefined, undefined]);
+      return map;
+    }
+
+    map.set(0, [undefined, cellIds.at(0)]);
+    for (let i = 1; i < cellIds.length; i++) {
+      map.set(i, [cellIds[i - 1], cellIds[i]]);
+    }
+    map.set(cellIds.length, [cellIds[cellIds.length - 1], undefined]);
+    return map;
+  }, [cellIds]);
+
+  const insertAt = useCallback(
+    (index: number, cellType: CellType) => {
+      const [left, right] = cellsAroundIdx.get(index) ?? [undefined, undefined];
+      onInsertCell(left as CellId, right as CellId, cellType);
+    },
+    [cellsAroundIdx],
+  );
+
+  const moveTo = useCallback(
+    (id: CellId, index: number) => {
+      const [left, right] = cellsAroundIdx.get(index) ?? [undefined, undefined];
+      onMoveCell(id, left as CellId, right as CellId);
+    },
+    [cellsAroundIdx],
+  );
+
   // Render cells in a stable DOM order (sorted by ID) so React never
   // needs to detach/reattach DOM nodes — Monaco editors can't survive that.
   // CSS `order` controls the visual position instead.
@@ -97,7 +136,7 @@ export function CellList({
     return (
       <div className="text-center py-12">
         <p className="text-gray-500 mb-4">No cells in this notebook yet.</p>
-        <InsertButton index={0} onInsertCell={onInsertCell} />
+        <InsertButton index={0} onInsertCell={insertAt} />
       </div>
     );
   }
@@ -105,7 +144,7 @@ export function CellList({
   return (
     <div className="flex flex-col">
       <div style={{ order: 0 }}>
-        <InsertButton index={0} onInsertCell={onInsertCell} />
+        <InsertButton index={0} onInsertCell={insertAt} />
       </div>
       {stableIds.map((id) => {
         const i = positionOf.get(id)!;
@@ -124,12 +163,10 @@ export function CellList({
               focusedByUsers={focusedByUsers}
               myCursorPosition={myCursorPosition}
               onDelete={() => onDeleteCell(id as CellId)}
-              onMoveUp={
-                i > 0 ? () => onMoveCell(id as CellId, i - 1) : undefined
-              }
+              onMoveUp={i > 0 ? () => moveTo(id as CellId, i - 1) : undefined}
               onMoveDown={
                 i < cellIds.length - 1
-                  ? () => onMoveCell(id as CellId, i + 1)
+                  ? () => moveTo(id as CellId, i + 2)
                   : undefined
               }
               onContentChange={onContentChange}
@@ -137,7 +174,7 @@ export function CellList({
               onContentDrivenFocusChange={onContentDrivenFocusChange}
               onExecute={onExecuteCell}
             />
-            <InsertButton index={i + 1} onInsertCell={onInsertCell} />
+            <InsertButton index={i + 1} onInsertCell={insertAt} />
           </div>
         );
       })}

@@ -5,6 +5,7 @@ use crate::protocol::types::{
     TextStateUpdateContext, UserId,
 };
 use crate::state::AppState;
+use fractional_index::FractionalIndex;
 use notebook::error::NotebookError;
 use notebook::notebook::Cell;
 use notebook::operation::NotebookOperation;
@@ -15,7 +16,7 @@ use std::error::Error;
 pub async fn handle_insert_cell(
     user_id: UserId,
     context: NotebookOperationContext,
-    index: usize,
+    index: FractionalIndex,
     cell_id: CellId,
     cell_type: CellType,
     content: Option<String>,
@@ -31,24 +32,17 @@ pub async fn handle_insert_cell(
         },
     };
 
-    let result = state
-        .notebook
-        .apply_cell_operation(operation, context.base_version)
-        .await;
+    let result = state.notebook.apply_cell_operation(operation).await;
 
     match result {
         Ok(result) => {
-            if let NotebookOperationResultData::InsertCell {
-                position: index,
-                cell,
-            } = result.data
-            {
+            if let NotebookOperationResultData::InsertCell { index, cell } = result.data {
                 handler::user::set_focus(user_id, cell.id, Some(0), state).await;
 
                 state
                     .broadcast(
                         ServerMessage::CellInsert {
-                            context: create_output_context(result.version, user_id, &context),
+                            context: create_output_context(user_id, &context),
                             index,
                             cell,
                         },
@@ -73,10 +67,7 @@ pub async fn handle_delete_cell(
 ) -> Result<(), Box<dyn Error>> {
     let operation = NotebookOperation::DeleteCell { cell_id };
 
-    let result = state
-        .notebook
-        .apply_cell_operation(operation, context.base_version)
-        .await;
+    let result = state.notebook.apply_cell_operation(operation).await;
 
     match result {
         Ok(result) => {
@@ -86,7 +77,7 @@ pub async fn handle_delete_cell(
                 state
                     .broadcast(
                         ServerMessage::CellDelete {
-                            context: create_output_context(result.version, user_id, &context),
+                            context: create_output_context(user_id, &context),
                             cell_id,
                         },
                         None,
@@ -106,30 +97,21 @@ pub async fn handle_move_cell(
     user_id: UserId,
     context: NotebookOperationContext,
     cell_id: CellId,
-    to_index: usize,
+    to_index: FractionalIndex,
     state: &AppState,
 ) -> Result<(), Box<dyn Error>> {
     let operation = NotebookOperation::MoveCell { cell_id, to_index };
 
-    let result = state
-        .notebook
-        .apply_cell_operation(operation, context.base_version)
-        .await;
+    let result = state.notebook.apply_cell_operation(operation).await;
 
     match result {
         Ok(result) => {
-            if let NotebookOperationResultData::MoveCell {
-                cell_id,
-                from_index,
-                to_index,
-            } = result.data
-            {
+            if let NotebookOperationResultData::MoveCell { cell_id, to_index } = result.data {
                 state
                     .broadcast(
                         ServerMessage::CellMove {
-                            context: create_output_context(result.version, user_id, &context),
+                            context: create_output_context(user_id, &context),
                             cell_id,
-                            from_index,
                             to_index,
                         },
                         None,
@@ -182,12 +164,10 @@ pub async fn handle_text_edit(
 }
 
 fn create_output_context(
-    version: u64,
     user_id: UserId,
     context: &NotebookOperationContext,
 ) -> NotebookStateUpdateContext {
     NotebookStateUpdateContext {
-        version,
         user_id,
         request_id: context.request_id,
     }
@@ -215,7 +195,6 @@ async fn send_error_message(
         sender
             .send(ServerMessage::OperationFailed {
                 context: NotebookStateUpdateContext {
-                    version: state.notebook.get_version().await,
                     user_id,
                     request_id: context.request_id,
                 },
