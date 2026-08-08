@@ -285,7 +285,8 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
       updateCellOutput(msg.cell_id, [
         {
           text: msg.text,
-          out_number: msg.execution_count > 0 ? msg.execution_count : null,
+          execution_number:
+            msg.execution_count > 0 ? msg.execution_count : null,
         },
       ]);
     },

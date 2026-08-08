@@ -14,7 +14,7 @@ export interface MarkdownCell extends BaseCell {
 
 export interface CellOutput {
   text: string;
-  out_number: number | null;
+  execution_number: number | null;
 }
 
 export type ExecutionState = "idle" | "pending" | "running" | "finishing";
