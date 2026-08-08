@@ -1,5 +1,6 @@
 import type { TextOperation } from "../wasm/ot/ot";
 import type { Cell, CellId } from "./cell";
+import type { CellIndex } from "./cell-index";
 
 export type RequestId = string & { readonly __brand: "request-id" };
 
@@ -12,7 +13,7 @@ export interface Operation {
 export type InsertOp = Operation & {
   type: "insert";
   cell: Cell;
-  index: number;
+  index: CellIndex;
 };
 
 export type DeleteOp = Operation & {
@@ -29,7 +30,7 @@ export type TextEditOp = Operation & {
 export type MoveOp = Operation & {
   type: "move";
   cell_id: CellId;
-  to_index: number;
+  to_index: CellIndex;
 };
 
 export type NoOp = Operation & {

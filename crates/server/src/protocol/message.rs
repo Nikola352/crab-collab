@@ -23,6 +23,7 @@ pub enum ClientMessage {
     },
     CellInsert {
         context: NotebookOperationContext,
+        #[serde(with = "fractional_index::stringify")]
         index: FractionalIndex,
         cell_id: CellId,
         cell_type: CellType,
@@ -35,6 +36,7 @@ pub enum ClientMessage {
     CellMove {
         context: NotebookOperationContext,
         cell_id: CellId,
+        #[serde(with = "fractional_index::stringify")]
         to_index: FractionalIndex,
     },
     TextEdit {
@@ -72,6 +74,7 @@ pub enum ServerMessage {
     },
     CellInsert {
         context: NotebookStateUpdateContext,
+        #[serde(with = "fractional_index::stringify")]
         index: FractionalIndex,
         cell: Cell,
     },
@@ -82,6 +85,7 @@ pub enum ServerMessage {
     CellMove {
         context: NotebookStateUpdateContext,
         cell_id: CellId,
+        #[serde(with = "fractional_index::stringify")]  
         to_index: FractionalIndex,
     },
 

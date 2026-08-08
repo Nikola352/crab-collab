@@ -17,6 +17,24 @@ fn parse_indexes(indexes: JsValue) -> Result<HashMap<String, FractionalIndex>, J
         .collect()
 }
 
+/// Computes a new fractional index based on a given optional lower and upper bounds.
+///
+/// Returns a value based on which bounds are provided:
+/// - both `left` and `right` given: an index strictly between them (errors if
+///   `left` does not sort before `right`).
+/// - only `left` given: an index sorting after it.
+/// - only `right` given: an index sorting before it.
+/// - neither given: the default index for an empty list.
+#[wasm_bindgen(js_name = newIndexBetween)]
+pub fn new_index_between(left: Option<String>, right: Option<String>) -> Result<String, JsValue> {
+    let left = left.as_deref().map(parse_index).transpose()?;
+    let right = right.as_deref().map(parse_index).transpose()?;
+
+    FractionalIndex::new(left.as_ref(), right.as_ref())
+        .map(|index| index.to_string())
+        .ok_or_else(|| JsValue::from_str("`left` must be strictly before `right`"))
+}
+
 /// A fractional-index-ordered list, keyed by opaque string element ids.
 #[wasm_bindgen]
 pub struct FractionalList {
@@ -69,6 +87,15 @@ impl FractionalList {
 
         serde_wasm_bindgen::to_value(&indexes)
             .expect("fractional list index serialization is infallible")
+    }
+
+    /// Returns the fractional index of the element with the given id, if any.
+    #[wasm_bindgen(js_name = getIndex)]
+    pub fn get_index(&self, id: &str) -> Option<String> {
+        self.inner
+            .get_indexes_by_id()
+            .get(id)
+            .map(|index| index.to_string())
     }
 
     /// Returns the element id exactly at the given fractional index, if any.

@@ -1,5 +1,6 @@
 import type { TextOperation } from "../wasm/ot/ot";
 import type { CellId } from "./cell";
+import type { CellIndex } from "./cell-index";
 import type { RequestId } from "./operation";
 
 // User messages
@@ -22,7 +23,7 @@ export interface TextOperationContext {
 export interface CellInsertMessage {
   type: "cell_insert";
   context: NotebookOperationContext;
-  index: number;
+  index: CellIndex;
   cell_id: CellId;
   cell_type: "code" | "markdown";
   content?: string;
@@ -38,7 +39,7 @@ export interface CellMoveMessage {
   type: "cell_move";
   context: NotebookOperationContext;
   cell_id: CellId;
-  to_index: number;
+  to_index: CellIndex;
 }
 
 export interface TextEditMessage {
