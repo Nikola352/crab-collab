@@ -21,12 +21,10 @@ import {
   isCodeCell,
 } from "../types/cell";
 import { useUserStore } from "./userStore";
-import { apply, transform, type TextOperation } from "../wasm/ot/ot";
-import type { ClientMessage, TextEditMessage } from "../types/client-message";
+import { apply, transform, compose, type TextOperation } from "../wasm/ot/ot";
+import type { SendFn, TextEditMessage } from "../types/client-message";
 import { FractionalList } from "../wasm/crdt/crdt";
 import { indexBetween, type CellIndex } from "../types/cell-index";
-
-type SendFn = (message: ClientMessage) => void;
 
 interface NotebookState {
   version: number;
@@ -37,8 +35,8 @@ interface NotebookState {
   // optimistic updates applied to the UI, but not confirmed by the server
   pendingOperations: Operation[];
 
-  // optimistic updates applied to the UI, but not yet sent to the server
-  pendingTextOperations: Record<CellId, TextEditOp[]>;
+  // optimistic updates applied to the UI, composed into one op, not yet sent to the server
+  pendingTextBuffer: Record<CellId, TextOperation | null>;
 
   // optimistic update applied to the UI, sent to the server, but not yet confirmed
   unconfirmedTextOperation: Record<CellId, TextEditOp | null>;
@@ -53,7 +51,8 @@ interface NotebookState {
   insertCell: (cell: Cell, prevId?: CellId, nextId?: CellId) => InsertOp;
   removeCell: (cell: Cell) => DeleteOp;
   moveCell: (cellId: string, prevId?: CellId, nextId?: CellId) => MoveOp;
-  textEdit: (cellId: string, operation: TextOperation, send: SendFn) => void;
+  localTextEdit: (cellId: CellId, diff: TextOperation) => void;
+  flushText: (cellId: CellId, send: SendFn) => boolean;
   updateCellOutput: (cellId: string, outputs: CellOutput[]) => void;
   clearCellOutputs: (cellId: string) => void;
   setCellExecutionState: (
@@ -66,8 +65,7 @@ interface NotebookState {
   receiveServerTextOperation: (
     operation: TextEditOp,
     isOwn: boolean,
-    send: SendFn,
-  ) => void;
+  ) => boolean;
 }
 
 export const useNotebookStore = create<NotebookState>()(
@@ -84,7 +82,7 @@ export const useNotebookStore = create<NotebookState>()(
     unconfirmedOperations: [],
     pendingOperations: [],
 
-    pendingTextOperations: {},
+    pendingTextBuffer: {},
     unconfirmedTextOperation: {},
 
     setVersion: (version) => set({ version }),
@@ -112,8 +110,8 @@ export const useNotebookStore = create<NotebookState>()(
           cells.map((c) => c.id),
           cell_metadata,
         ),
-        pendingTextOperations: cells.reduce(
-          (acc, cell) => ({ ...acc, [cell.id]: [] }),
+        pendingTextBuffer: cells.reduce(
+          (acc, cell) => ({ ...acc, [cell.id]: null }),
           {},
         ),
         unconfirmedTextOperation: cells.reduce(
@@ -122,18 +120,22 @@ export const useNotebookStore = create<NotebookState>()(
         ),
       }),
 
-    textEdit: (cellId: string, operation: TextOperation, send: SendFn) => {
-      const id = uuidv4() as RequestId;
+    localTextEdit: (cellId: CellId, diff: TextOperation) => {
       set((state) => {
-        const op = {
-          id,
-          version: state.cellVersions[cellId] ?? 0,
-          type: "text_edit",
-          cell_id: cellId,
-          operation,
-        } as TextEditOp;
-        applyLocalTextOperation(state, op, send);
+        if (!state.cells[cellId]) return;
+        editText(state, { cell_id: cellId, operation: diff });
+        const existing = state.pendingTextBuffer[cellId];
+        state.pendingTextBuffer[cellId] =
+          existing == null ? diff : compose(existing, diff);
       });
+    },
+
+    flushText: (cellId: CellId, send: SendFn) => {
+      let didSend = false;
+      set((state) => {
+        didSend = tryFlushBuffer(state, cellId, send);
+      });
+      return didSend;
     },
 
     insertCell: (cell: Cell, prevId?: CellId, nextId?: CellId) => {
@@ -281,11 +283,9 @@ export const useNotebookStore = create<NotebookState>()(
         }
       }),
 
-    receiveServerTextOperation: (
-      operation: TextEditOp,
-      isOwn: boolean,
-      send: SendFn,
-    ) =>
+    receiveServerTextOperation: (operation: TextEditOp, isOwn: boolean) => {
+      let wasOwnAck = false;
+
       set((state) => {
         const cellId = operation.cell_id;
 
@@ -295,7 +295,7 @@ export const useNotebookStore = create<NotebookState>()(
         ) {
           state.cellVersions[cellId] = operation.version;
           state.unconfirmedTextOperation[cellId] = null;
-          pushTextOpToServer(state, cellId, send);
+          wasOwnAck = true;
           return;
         }
 
@@ -310,18 +310,21 @@ export const useNotebookStore = create<NotebookState>()(
           text_operation = transformed;
         }
 
-        for (const op of state.pendingTextOperations[cellId] ?? []) {
-          const { aPrime, bPrime } = transform(text_operation, op.operation);
+        const buffered = state.pendingTextBuffer[cellId];
+        if (buffered != null) {
+          const { aPrime, bPrime } = transform(text_operation, buffered);
           text_operation = aPrime;
-          op.operation = bPrime;
-          op.version = operation.version;
+          state.pendingTextBuffer[cellId] = bPrime;
         }
 
         operation.operation = text_operation;
         editText(state, operation);
 
         state.cellVersions[cellId] = operation.version;
-      }),
+      });
+
+      return wasOwnAck;
+    },
   })),
 );
 
@@ -339,14 +342,15 @@ function handleOperation(state: NotebookState, operation: Operation) {
 function insertCell(state: NotebookState, { cell, index }: InsertOp) {
   state.cells[cell.id] = cell;
   state.cellVersions[cell.id] = 0;
-  state.pendingTextOperations[cell.id] = [];
+  state.pendingTextBuffer[cell.id] = null;
   state.cellOrder.insertAt(cell.id, index);
 }
 
 function deleteCell(state: NotebookState, { cell_id }: DeleteOp) {
   delete state.cells[cell_id];
   delete state.cellVersions[cell_id];
-  delete state.pendingTextOperations[cell_id];
+  delete state.pendingTextBuffer[cell_id];
+  delete state.unconfirmedTextOperation[cell_id];
   state.cellOrder.delete(cell_id);
 }
 
@@ -354,45 +358,50 @@ function moveCellInOrder(state: NotebookState, { cell_id, to_index }: MoveOp) {
   state.cellOrder.moveTo(cell_id, to_index);
 }
 
-function applyLocalTextOperation(
+function editText(
   state: NotebookState,
-  operation: TextEditOp,
-  send: SendFn,
+  { cell_id, operation }: { cell_id: CellId; operation: TextOperation },
 ) {
-  editText(state, operation);
-  state.pendingTextOperations[operation.cell_id].push(operation);
-  if (state.unconfirmedTextOperation[operation.cell_id] == null) {
-    pushTextOpToServer(state, operation.cell_id, send);
-  }
-}
-
-function editText(state: NotebookState, { cell_id, operation }: TextEditOp) {
   state.cells[cell_id].content = apply(operation, state.cells[cell_id].content);
   useUserStore
     .getState()
     .transformfocusPositionsForTextEdit(cell_id, operation);
 }
 
-function pushTextOpToServer(
+// Promotes the composed pending buffer op to `unconfirmedTextOperation` and
+// sends it, iff nothing is currently in flight and there's something buffered.
+// Returns whether a send actually happened.
+function tryFlushBuffer(
   state: NotebookState,
   cellId: CellId,
   send: SendFn,
-) {
-  if (!state.pendingTextOperations[cellId]?.length) {
-    return;
-  }
-  const operation = state.pendingTextOperations[cellId].shift()!;
-  state.unconfirmedTextOperation[cellId] = operation;
+): boolean {
+  if (!state.cells[cellId]) return false;
+  if (state.unconfirmedTextOperation[cellId] != null) return false;
+  const operation = state.pendingTextBuffer[cellId];
+  if (operation == null) return false;
+
+  const op: TextEditOp = {
+    id: uuidv4() as RequestId,
+    version: state.cellVersions[cellId] ?? 0,
+    type: "text_edit",
+    cell_id: cellId,
+    operation,
+  };
+  state.unconfirmedTextOperation[cellId] = op;
+  state.pendingTextBuffer[cellId] = null;
 
   send({
     type: "text_edit",
     context: {
-      base_cell_version: operation.version,
-      request_id: operation.id,
+      base_cell_version: op.version,
+      request_id: op.id,
     },
     cell_id: cellId,
-    operation: operation.operation,
+    operation: operation,
   } as TextEditMessage);
+
+  return true;
 }
 
 function extract_idx_and_id(

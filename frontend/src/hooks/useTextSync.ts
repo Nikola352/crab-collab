@@ -1,100 +1,98 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useNotebookStore } from "../stores/notebookStore";
 import type { CellId } from "../types/cell";
-import type { ClientMessage } from "../types/client-message";
-import { TextOperation } from "../wasm/ot/ot";
+import type { SendFn } from "../types/client-message";
+import { computeDiff } from "../utils/textDiff";
 
-type SendFn = (message: ClientMessage) => void;
-
-const DEBOUNCE_MS = 200;
-
-function computeDiff(oldStr: string, newStr: string): TextOperation {
-  // Diff by Unicode codepoint, not UTF-16 code unit
-  const oldChars = Array.from(oldStr);
-  const newChars = Array.from(newStr);
-
-  let prefixLen = 0;
-  while (
-    prefixLen < oldChars.length &&
-    prefixLen < newChars.length &&
-    oldChars[prefixLen] === newChars[prefixLen]
-  ) {
-    prefixLen++;
-  }
-
-  let suffixLen = 0;
-  while (
-    suffixLen < oldChars.length - prefixLen &&
-    suffixLen < newChars.length - prefixLen &&
-    oldChars[oldChars.length - 1 - suffixLen] ===
-      newChars[newChars.length - 1 - suffixLen]
-  ) {
-    suffixLen++;
-  }
-
-  const operation = TextOperation.default();
-  if (prefixLen > 0) {
-    operation.retain(prefixLen);
-  }
-  if (prefixLen + suffixLen < oldChars.length) {
-    operation.delete(oldChars.length - (prefixLen + suffixLen));
-  }
-  if (prefixLen + suffixLen < newChars.length) {
-    operation.insert(
-      newChars.slice(prefixLen, newChars.length - suffixLen).join(""),
-    );
-  }
-  if (suffixLen > 0) {
-    operation.retain(suffixLen);
-  }
-
-  return operation;
-}
+const IDLE_DEBOUNCE_MS = 100;
+const SEND_THROTTLE_MS = 100;
 
 type ReportFocusFn = (cellId: CellId, cursorPosition: number) => void;
 
 export function useTextSync(send: SendFn, reportFocus: ReportFocusFn) {
-  const lastSentContent = useRef<Map<CellId, string>>(new Map());
-  const debounceTimers = useRef<Map<CellId, number>>(new Map());
+  const idleTimers = useRef<Map<CellId, number>>(new Map());
+  const retryTimers = useRef<Map<CellId, number>>(new Map());
+  const burstTimers = useRef<Map<CellId, number>>(new Map());
+
+  const lastFlushAt = useRef<Map<CellId, number>>(new Map());
+
   // Cursor positions from edits (typing/paste/undo), held back so they never
   // reach other clients ahead of the text_edit that produced them
   const pendingCursorPositions = useRef<Map<CellId, number>>(new Map());
 
-  const scheduleSync = useCallback(
-    (cellId: CellId, currentContent: string) => {
-      const existing = debounceTimers.current.get(cellId);
-      if (existing) clearTimeout(existing);
-
-      const timer = setTimeout(() => {
-        debounceTimers.current.delete(cellId);
-
-        const store = useNotebookStore.getState();
-        // Check cell still exists
-        if (!store.getCell(cellId)) {
-          lastSentContent.current.delete(cellId);
-          pendingCursorPositions.current.delete(cellId);
-          return;
-        }
-
-        const oldContent = lastSentContent.current.get(cellId) ?? "";
-        if (currentContent === oldContent) return;
-
-        const diffOp = computeDiff(oldContent, currentContent);
-
-        store.textEdit(cellId, diffOp, send);
-
-        lastSentContent.current.set(cellId, currentContent);
-
-        const cursorPosition = pendingCursorPositions.current.get(cellId);
-        if (cursorPosition !== undefined) {
-          pendingCursorPositions.current.delete(cellId);
-          reportFocus(cellId, cursorPosition);
-        }
-      }, DEBOUNCE_MS);
-
-      debounceTimers.current.set(cellId, timer);
+  const flushCursorIfPending = useCallback(
+    (cellId: CellId) => {
+      const cursorPosition = pendingCursorPositions.current.get(cellId);
+      if (cursorPosition !== undefined) {
+        pendingCursorPositions.current.delete(cellId);
+        reportFocus(cellId, cursorPosition);
+      }
     },
-    [send, reportFocus],
+    [reportFocus],
+  );
+
+  const attemptFlushRef = useRef<(cellId: CellId) => void>(() => {});
+
+  const scheduleIn = useCallback(
+    (timers: Map<CellId, number>, cellId: CellId, delay: number) => {
+      const existing = timers.get(cellId);
+      if (existing) clearTimeout(existing);
+      const timer = setTimeout(() => {
+        timers.delete(cellId);
+        attemptFlushRef.current(cellId);
+      }, delay);
+      timers.set(cellId, timer);
+    },
+    [],
+  );
+
+  const scheduleIfAbsent = useCallback(
+    (timers: Map<CellId, number>, cellId: CellId, delay: number) => {
+      if (timers.has(cellId)) return;
+      const timer = setTimeout(() => {
+        timers.delete(cellId);
+        attemptFlushRef.current(cellId);
+      }, delay);
+      timers.set(cellId, timer);
+    },
+    [],
+  );
+
+  const attemptFlush = useCallback(
+    (cellId: CellId) => {
+      const now = Date.now();
+      const elapsed = now - (lastFlushAt.current.get(cellId) ?? 0);
+      if (elapsed < SEND_THROTTLE_MS) {
+        scheduleIn(retryTimers.current, cellId, SEND_THROTTLE_MS - elapsed);
+        return;
+      }
+
+      const sent = useNotebookStore.getState().flushText(cellId, send);
+      if (sent) {
+        lastFlushAt.current.set(cellId, now);
+        flushCursorIfPending(cellId);
+      }
+    },
+    [send, flushCursorIfPending, scheduleIn],
+  );
+
+  useEffect(() => {
+    attemptFlushRef.current = attemptFlush;
+  }, [attemptFlush]);
+
+  const handleChange = useCallback(
+    (cellId: CellId, content: string) => {
+      const store = useNotebookStore.getState();
+      const cell = store.getCell(cellId);
+      if (!cell) return;
+
+      const diff = computeDiff(cell.content, content);
+      store.localTextEdit(cellId, diff);
+
+      scheduleIn(idleTimers.current, cellId, IDLE_DEBOUNCE_MS);
+      scheduleIfAbsent(burstTimers.current, cellId, SEND_THROTTLE_MS);
+    },
+    [scheduleIn, scheduleIfAbsent],
   );
 
   const noteCursorPosition = useCallback(
@@ -104,17 +102,29 @@ export function useTextSync(send: SendFn, reportFocus: ReportFocusFn) {
     [],
   );
 
-  const initCell = useCallback((cellId: CellId, content: string) => {
-    lastSentContent.current.set(cellId, content);
-  }, []);
+  const handleAckFlush = useCallback(
+    (cellId: CellId) => {
+      attemptFlush(cellId);
+    },
+    [attemptFlush],
+  );
 
   const removeCell = useCallback((cellId: CellId) => {
-    const timer = debounceTimers.current.get(cellId);
-    if (timer) clearTimeout(timer);
-    debounceTimers.current.delete(cellId);
-    lastSentContent.current.delete(cellId);
+    const idle = idleTimers.current.get(cellId);
+    if (idle) clearTimeout(idle);
+    idleTimers.current.delete(cellId);
+
+    const retry = retryTimers.current.get(cellId);
+    if (retry) clearTimeout(retry);
+    retryTimers.current.delete(cellId);
+
+    const burst = burstTimers.current.get(cellId);
+    if (burst) clearTimeout(burst);
+    burstTimers.current.delete(cellId);
+
+    lastFlushAt.current.delete(cellId);
     pendingCursorPositions.current.delete(cellId);
   }, []);
 
-  return { scheduleSync, noteCursorPosition, initCell, removeCell };
+  return { handleChange, noteCursorPosition, handleAckFlush, removeCell };
 }

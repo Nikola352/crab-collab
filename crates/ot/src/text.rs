@@ -99,6 +99,11 @@ pub fn transform(a: &TextOperation, b: &TextOperation) -> Result<TextTransformRe
 }
 
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn compose(a: &TextOperation, b: &TextOperation) -> Result<TextOperation, OTError> {
+    Ok(TextOperation(a.0.compose(&b.0)?))
+}
+
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn apply(operation: &TextOperation, text: &str) -> Result<String, OTError> {
     Ok(operation.0.apply(text)?)
 }

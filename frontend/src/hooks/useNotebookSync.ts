@@ -10,7 +10,7 @@ import { useUserStore } from "../stores/userStore";
 import { TextOperation } from "../wasm/ot/ot";
 
 import type { MessageHandler } from "./useWebsocket";
-import type { ClientMessage } from "../types/client-message";
+import type { SendFn } from "../types/client-message";
 import type {
   FullStateMessage,
   JoinMessage,
@@ -45,7 +45,6 @@ import {
 } from "../types/cell";
 import { toCellState } from "../types/execution";
 
-type SendFn = (message: ClientMessage) => void;
 type OnFn = (messageType: string, handler: MessageHandler) => void;
 
 export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
@@ -107,19 +106,8 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
         setCellVersions(msg.cell_versions);
       }
       setUsers(msg.users);
-      for (const cell of msg.notebook.cells) {
-        textSync.initCell(cell.id, cell.content);
-      }
     },
-    [
-      setSession,
-      setCells,
-      setUsers,
-      setVersion,
-      setCellVersions,
-      userName,
-      textSync,
-    ],
+    [setSession, setCells, setUsers, setVersion, setCellVersions, userName],
   );
 
   const handleJoin = useCallback(
@@ -161,13 +149,12 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
       };
       const isOwn = msg.context.user_id === useSessionStore.getState().userId;
       receiveServerOperation(operation, isOwn);
-      textSync.initCell(msg.cell.id, msg.cell.content);
       updateUser(msg.context.user_id, {
         focused_cell: msg.cell.id,
         cursor_position: 0,
       });
     },
-    [receiveServerOperation, textSync, updateUser],
+    [receiveServerOperation, updateUser],
   );
 
   const handleCellDelete = useCallback(
@@ -241,18 +228,12 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
         operation: TextOperation.fromJSON(JSON.stringify(msg.operation)),
       };
       const isOwn = msg.context.user_id === useSessionStore.getState().userId;
-      receiveServerTextOperation(operation, isOwn, send);
-      if (!isOwn) {
-        // After sync from server, update content for next edits to diff against
-        const updatedContent = useNotebookStore
-          .getState()
-          .getCell(msg.cell_id)?.content;
-        if (updatedContent !== undefined) {
-          textSync.initCell(msg.cell_id, updatedContent);
-        }
+      const wasOwnAck = receiveServerTextOperation(operation, isOwn);
+      if (wasOwnAck) {
+        textSync.handleAckFlush(msg.cell_id);
       }
     },
-    [receiveServerTextOperation, send, textSync],
+    [receiveServerTextOperation, textSync],
   );
 
   const handleChangeFocus = useCallback(
@@ -358,7 +339,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
 
   const handleContentChange = useCallback(
     (cellId: CellId, content: string) => {
-      textSync.scheduleSync(cellId, content);
+      textSync.handleChange(cellId, content);
     },
     [textSync],
   );
@@ -394,7 +375,6 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
             };
 
       const op = insertCellStore(cell, prevId, nextId);
-      textSync.initCell(cellId, "");
 
       send({
         type: "cell_insert",
@@ -412,7 +392,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
         updateUser(ownUserId, { focused_cell: cellId, cursor_position: 0 });
       }
     },
-    [insertCellStore, send, textSync, updateUser],
+    [insertCellStore, send, updateUser],
   );
 
   const handleDeleteCell = useCallback(

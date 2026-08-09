@@ -69,6 +69,8 @@ export type ClientMessage =
   | ChangeFocusMessage
   | ExecuteCellMessage;
 
+export type SendFn = (message: ClientMessage) => void;
+
 export function isJoinMessage(message: ClientMessage): message is JoinMessage {
   return message.type === "join";
 }
