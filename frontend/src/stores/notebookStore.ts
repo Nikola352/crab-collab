@@ -21,10 +21,12 @@ import {
   isCodeCell,
 } from "../types/cell";
 import { useUserStore } from "./userStore";
+import { useSessionStore } from "./sessionStore";
 import { apply, transform, compose, type TextOperation } from "../wasm/ot/ot";
 import type { SendFn, TextEditMessage } from "../types/client-message";
 import { FractionalList } from "../wasm/crdt/crdt";
 import { indexBetween, type CellIndex } from "../types/cell-index";
+import type { UserId } from "../types/user";
 
 interface NotebookState {
   version: number;
@@ -65,6 +67,7 @@ interface NotebookState {
   receiveServerTextOperation: (
     operation: TextEditOp,
     isOwn: boolean,
+    authorId: UserId,
   ) => boolean;
 }
 
@@ -121,9 +124,10 @@ export const useNotebookStore = create<NotebookState>()(
       }),
 
     localTextEdit: (cellId: CellId, diff: TextOperation) => {
+      const authorId = useSessionStore.getState().userId!;
       set((state) => {
         if (!state.cells[cellId]) return;
-        editText(state, { cell_id: cellId, operation: diff });
+        editText(state, { cell_id: cellId, operation: diff }, authorId);
         const existing = state.pendingTextBuffer[cellId];
         state.pendingTextBuffer[cellId] =
           existing == null ? diff : compose(existing, diff);
@@ -283,7 +287,11 @@ export const useNotebookStore = create<NotebookState>()(
         }
       }),
 
-    receiveServerTextOperation: (operation: TextEditOp, isOwn: boolean) => {
+    receiveServerTextOperation: (
+      operation: TextEditOp,
+      isOwn: boolean,
+      authorId: UserId,
+    ) => {
       let wasOwnAck = false;
 
       set((state) => {
@@ -318,7 +326,7 @@ export const useNotebookStore = create<NotebookState>()(
         }
 
         operation.operation = text_operation;
-        editText(state, operation);
+        editText(state, operation, authorId);
 
         state.cellVersions[cellId] = operation.version;
       });
@@ -361,11 +369,12 @@ function moveCellInOrder(state: NotebookState, { cell_id, to_index }: MoveOp) {
 function editText(
   state: NotebookState,
   { cell_id, operation }: { cell_id: CellId; operation: TextOperation },
+  authorId: UserId,
 ) {
   state.cells[cell_id].content = apply(operation, state.cells[cell_id].content);
   useUserStore
     .getState()
-    .transformfocusPositionsForTextEdit(cell_id, operation);
+    .transformfocusPositionsForTextEdit(cell_id, operation, authorId);
 }
 
 // Promotes the composed pending buffer op to `unconfirmedTextOperation` and

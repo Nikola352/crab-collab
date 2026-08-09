@@ -47,7 +47,10 @@ impl FocusState {
             .or_insert_with(|| Arc::new(RwLock::new(HashMap::new())))
             .clone();
 
-        current_bucket.write().await.insert(user_id, cursor_position);
+        current_bucket
+            .write()
+            .await
+            .insert(user_id, cursor_position);
     }
 
     pub async fn clear_user_focus(&self, user_id: UserId) {
@@ -87,6 +90,7 @@ impl FocusState {
         &self,
         cell_id: CellId,
         operation: &TextOperation,
+        author_id: UserId,
     ) {
         let bucket = {
             let index = self.index.read().await;
@@ -98,8 +102,8 @@ impl FocusState {
         };
 
         let mut positions = bucket.write().await;
-        for position in positions.values_mut() {
-            *position = transform_position(*position, operation);
+        for (user_id, position) in positions.iter_mut() {
+            *position = transform_position(*position, operation, *user_id == author_id);
         }
     }
 

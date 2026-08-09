@@ -228,7 +228,11 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
         operation: TextOperation.fromJSON(JSON.stringify(msg.operation)),
       };
       const isOwn = msg.context.user_id === useSessionStore.getState().userId;
-      const wasOwnAck = receiveServerTextOperation(operation, isOwn);
+      const wasOwnAck = receiveServerTextOperation(
+        operation,
+        isOwn,
+        msg.context.user_id,
+      );
       if (wasOwnAck) {
         textSync.handleAckFlush(msg.cell_id);
       }

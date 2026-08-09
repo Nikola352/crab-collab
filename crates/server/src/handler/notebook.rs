@@ -143,7 +143,7 @@ pub async fn handle_text_edit(
         Ok(result) => {
             state
                 .focus
-                .transform_positions_for_text_edit(cell_id, &result.operation)
+                .transform_positions_for_text_edit(cell_id, &result.operation, user_id)
                 .await;
 
             state

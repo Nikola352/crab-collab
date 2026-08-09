@@ -109,7 +109,11 @@ pub fn apply(operation: &TextOperation, text: &str) -> Result<String, OTError> {
 }
 
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
-pub fn transform_position(position: usize, operation: &TextOperation) -> usize {
+pub fn transform_position(
+    position: usize,
+    operation: &TextOperation,
+    move_on_insert: bool,
+) -> usize {
     let mut pos = position;
     let mut new_pos = position;
     for op in operation.0.ops() {
@@ -121,7 +125,9 @@ pub fn transform_position(position: usize, operation: &TextOperation) -> usize {
                 pos -= *len as usize;
             }
             Operation::Insert(text) => {
-                new_pos += text.chars().count();
+                if move_on_insert || pos > 0 {
+                    new_pos += text.chars().count();
+                }
             }
             Operation::Delete(len) => {
                 new_pos -= min(pos, *len as usize);

@@ -13,6 +13,7 @@ interface UserState {
   transformfocusPositionsForTextEdit: (
     cellId: CellId,
     operation: TextOperation,
+    authorId: UserId,
   ) => Record<UserId, number>;
 }
 
@@ -47,6 +48,7 @@ export const useUserStore = create<UserState>((set, get) => ({
   transformfocusPositionsForTextEdit: (
     cellId: CellId,
     operation: TextOperation,
+    authorId: UserId,
   ) => {
     const cursorPositions = get().users.reduce(
       (positions, user) => {
@@ -54,6 +56,7 @@ export const useUserStore = create<UserState>((set, get) => ({
           positions[user.id] = transform_position(
             user.cursor_position,
             operation,
+            user.id === authorId,
           );
         }
         return positions;
