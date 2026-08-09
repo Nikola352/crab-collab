@@ -60,8 +60,13 @@ if [ "$WATCH" = true ]; then
   echo "[wasm-build] watching $CRATE_DIR for changes..."
   WATCH_PATHS=("$CRATE_DIR/src" "$CRATE_DIR/Cargo.toml")
   last_snapshot=""
+  if stat -c '%Y %n' "$0" >/dev/null 2>&1; then
+    STAT_ARGS=(-c '%Y %n')
+  else
+    STAT_ARGS=(-f '%m %N')
+  fi
   while true; do
-    current="$(find "${WATCH_PATHS[@]}" -type f -exec stat -c '%Y %n' {} + 2>/dev/null | sort)"
+    current="$(find "${WATCH_PATHS[@]}" -type f -exec stat "${STAT_ARGS[@]}" {} + 2>/dev/null | sort)"
     if [ "$current" != "$last_snapshot" ]; then
       if [ -n "$last_snapshot" ]; then
         echo "[wasm-build] change detected, rebuilding..."
