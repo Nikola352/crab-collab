@@ -47,6 +47,7 @@ pub enum ClientMessage {
     ChangeFocus {
         cell_id: CellId,
         cursor_position: usize,
+        base_cell_version: u64,
     },
     ExecuteCell {
         cell_id: CellId,
@@ -85,7 +86,7 @@ pub enum ServerMessage {
     CellMove {
         context: NotebookStateUpdateContext,
         cell_id: CellId,
-        #[serde(with = "fractional_index::stringify")]  
+        #[serde(with = "fractional_index::stringify")]
         to_index: FractionalIndex,
     },
 

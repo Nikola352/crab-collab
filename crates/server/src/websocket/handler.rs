@@ -115,7 +115,17 @@ async fn handle_client_message(
         ClientMessage::ChangeFocus {
             cell_id,
             cursor_position,
-        } => handler::user::handle_change_focus(user_id, cell_id, cursor_position, state).await?,
+            base_cell_version,
+        } => {
+            handler::user::handle_change_focus(
+                user_id,
+                cell_id,
+                cursor_position,
+                base_cell_version,
+                state,
+            )
+            .await?
+        }
         ClientMessage::ExecuteCell { cell_id } => {
             handler::execution::handle_execute(user_id, cell_id, state).await?
         }

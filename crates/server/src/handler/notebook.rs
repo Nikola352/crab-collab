@@ -136,7 +136,7 @@ pub async fn handle_text_edit(
 ) -> Result<(), Box<dyn Error>> {
     let result = state
         .notebook
-        .apply_text_operation(operation, cell_id, context.base_cell_version)
+        .apply_text_operation(operation, cell_id, context.base_cell_version, user_id)
         .await;
 
     match result {

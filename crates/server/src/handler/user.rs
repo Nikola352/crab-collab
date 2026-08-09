@@ -55,9 +55,16 @@ pub async fn handle_change_focus(
     user_id: UserId,
     cell_id: CellId,
     cursor_position: usize,
+    base_cell_version: u64,
     state: &AppState,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let cursor_position = state
+        .notebook
+        .rebase_cursor_position(cell_id, base_cell_version, cursor_position, user_id)
+        .await;
+
     set_focus(user_id, cell_id, Some(cursor_position), state).await;
+
     state
         .broadcast(
             ServerMessage::ChangeFocus {

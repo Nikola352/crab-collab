@@ -1,3 +1,4 @@
+use crate::conflict_resolver::state::OriginId;
 use crate::notebook::{Cell, CellId};
 use fractional_index::FractionalIndex;
 use ot::text::TextOperation;
@@ -28,4 +29,5 @@ pub struct TextOperationResult {
     pub version: u64,
     pub cell_id: CellId,
     pub operation: TextOperation,
+    pub origin_id: OriginId,
 }

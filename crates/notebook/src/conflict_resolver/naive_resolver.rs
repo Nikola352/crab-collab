@@ -1,4 +1,4 @@
-use crate::conflict_resolver::state::NotebookStateHolder;
+use crate::conflict_resolver::state::{NotebookStateHolder, OriginId};
 use crate::error::NotebookError;
 use crate::notebook::{Cell, CellId, CellKind, CellOutput, Notebook};
 use crate::operation::NotebookOperation;
@@ -7,7 +7,7 @@ use crate::operation::result::{
 };
 use crdt::list::FractionalList;
 use fractional_index::FractionalIndex;
-use ot::text::{TextOperation, apply, transform};
+use ot::text::{TextOperation, apply, transform, transform_position};
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 
@@ -71,9 +71,11 @@ impl NotebookStateHolder for NaiveStateHolder {
         operation: TextOperation,
         cell_id: CellId,
         base_cell_version: u64,
+        origin_id: OriginId,
     ) -> Result<TextOperationResult, NotebookError> {
         let mut state = self.inner.write().await;
-        let result = state.apply_text_operation(cell_id, base_cell_version, operation)?;
+        let result =
+            state.apply_text_operation(cell_id, base_cell_version, operation, origin_id)?;
         *state.cell_versions.entry(cell_id).or_insert(0) += 1;
         state
             .text_operation_history
@@ -81,6 +83,17 @@ impl NotebookStateHolder for NaiveStateHolder {
             .or_insert(Vec::new())
             .push(result.clone());
         Ok(result)
+    }
+
+    async fn rebase_cursor_position(
+        &self,
+        cell_id: CellId,
+        base_cell_version: u64,
+        position: usize,
+        origin_id: OriginId,
+    ) -> usize {
+        let state = self.inner.read().await;
+        state.rebase_position(cell_id, base_cell_version, position, origin_id)
     }
 
     async fn get_cell_version(&self, cell_id: CellId) -> u64 {
@@ -222,6 +235,7 @@ impl State {
         cell_id: CellId,
         base_cell_version: u64,
         operation: TextOperation,
+        origin_id: OriginId,
     ) -> Result<TextOperationResult, NotebookError> {
         let mut real_op = operation;
 
@@ -243,6 +257,27 @@ impl State {
             version: *self.cell_versions.entry(cell_id).or_default() + 1,
             cell_id,
             operation: real_op,
+            origin_id,
         })
+    }
+
+    fn rebase_position(
+        &self,
+        cell_id: CellId,
+        base_cell_version: u64,
+        position: usize,
+        origin_id: OriginId,
+    ) -> usize {
+        let mut pos = position;
+
+        if let Some(operations) = self.text_operation_history.get(&cell_id) {
+            let op_results = &operations[base_cell_version as usize..operations.len()];
+            for op_result in op_results {
+                pos =
+                    transform_position(pos, &op_result.operation, op_result.origin_id == origin_id);
+            }
+        }
+
+        pos
     }
 }

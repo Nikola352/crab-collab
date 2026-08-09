@@ -53,6 +53,7 @@ export interface ChangeFocusMessage {
   type: "change_focus";
   cell_id: CellId;
   cursor_position: number;
+  base_cell_version: number;
 }
 
 export interface ExecuteCellMessage {

@@ -242,9 +242,12 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
 
   const handleChangeFocus = useCallback(
     (msg: ChangeFocusMessage) => {
+      const cursorPosition = useNotebookStore
+        .getState()
+        .rebaseCursorPosition(msg.cell_id, msg.cursor_position);
       updateUser(msg.user_id, {
         focused_cell: msg.cell_id,
-        cursor_position: msg.cursor_position,
+        cursor_position: cursorPosition,
       });
     },
     [updateUser],

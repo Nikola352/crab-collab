@@ -22,7 +22,13 @@ import {
 } from "../types/cell";
 import { useUserStore } from "./userStore";
 import { useSessionStore } from "./sessionStore";
-import { apply, transform, compose, type TextOperation } from "../wasm/ot/ot";
+import {
+  apply,
+  transform,
+  compose,
+  transform_position,
+  type TextOperation,
+} from "../wasm/ot/ot";
 import type { SendFn, TextEditMessage } from "../types/client-message";
 import { FractionalList } from "../wasm/crdt/crdt";
 import { indexBetween, type CellIndex } from "../types/cell-index";
@@ -55,6 +61,7 @@ interface NotebookState {
   moveCell: (cellId: string, prevId?: CellId, nextId?: CellId) => MoveOp;
   localTextEdit: (cellId: CellId, diff: TextOperation) => void;
   flushText: (cellId: CellId, send: SendFn) => boolean;
+  rebaseCursorPosition: (cellId: CellId, position: number) => number;
   updateCellOutput: (cellId: string, outputs: CellOutput[]) => void;
   clearCellOutputs: (cellId: string) => void;
   setCellExecutionState: (
@@ -140,6 +147,23 @@ export const useNotebookStore = create<NotebookState>()(
         didSend = tryFlushBuffer(state, cellId, send);
       });
       return didSend;
+    },
+
+    rebaseCursorPosition: (cellId: CellId, position: number) => {
+      const state = get();
+      let pos = position;
+
+      const unconfirmed = state.unconfirmedTextOperation[cellId];
+      if (unconfirmed != null) {
+        pos = transform_position(pos, unconfirmed.operation, false);
+      }
+
+      const buffered = state.pendingTextBuffer[cellId];
+      if (buffered != null) {
+        pos = transform_position(pos, buffered, false);
+      }
+
+      return pos;
     },
 
     insertCell: (cell: Cell, prevId?: CellId, nextId?: CellId) => {

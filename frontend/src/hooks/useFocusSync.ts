@@ -3,6 +3,7 @@ import type { CellId } from "../types/cell";
 import type { ClientMessage } from "../types/client-message";
 import { useSessionStore } from "../stores/sessionStore";
 import { useUserStore } from "../stores/userStore";
+import { useNotebookStore } from "../stores/notebookStore";
 
 type SendFn = (message: ClientMessage) => void;
 
@@ -29,12 +30,17 @@ export function useFocusSync(send: SendFn) {
         clearTimeout(timerRef.current);
       }
 
+      const baseCellVersion = useNotebookStore
+        .getState()
+        .getCellVersion(cellId);
+
       timerRef.current = setTimeout(() => {
         lastSent.current = { cellId, position: cursorPosition };
         send({
           type: "change_focus",
           cell_id: cellId,
           cursor_position: cursorPosition,
+          base_cell_version: baseCellVersion,
         });
         timerRef.current = null;
       }, 75);
