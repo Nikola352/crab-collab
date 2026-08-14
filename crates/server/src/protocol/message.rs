@@ -103,6 +103,7 @@ pub enum ServerMessage {
 
     TextOperationFailed {
         context: TextStateUpdateContext,
+        cell_id: CellId,
         message: String,
     },
 

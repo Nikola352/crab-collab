@@ -223,6 +223,7 @@ async fn send_text_error_message(
                     user_id,
                     request_id: context.request_id,
                 },
+                cell_id,
                 message: err.to_string(),
             })
             .await?;

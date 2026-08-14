@@ -79,6 +79,7 @@ export interface OperationFailedMessage {
 export interface TextOperationFailedMessage {
   type: "text_operation_failed";
   context: TextStateUpdateContext;
+  cell_id: CellId;
   message: string;
 }
 

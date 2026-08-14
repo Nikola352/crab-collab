@@ -81,6 +81,9 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
   const receiveServerTextOperation = useNotebookStore(
     (state) => state.receiveServerTextOperation,
   );
+  const clearUnconfirmedTextOperation = useNotebookStore(
+    (state) => state.clearUnconfirmedTextOperation,
+  );
 
   // Buffer server messages that arrive before the initial full state sync, then replay them once it lands.
   const syncCompletedRef = useRef(false);
@@ -255,16 +258,10 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
   const handleTextOperationFailed = useCallback(
     (msg: TextOperationFailedMessage) => {
       console.log("Text operation failed: ", msg);
-      receiveServerOperation(
-        {
-          id: msg.context.request_id,
-          version: msg.context.cell_version,
-          type: "noop",
-        } as NoOp,
-        true,
-      );
+      clearUnconfirmedTextOperation(msg.cell_id);
+      textSync.handleAckFlush(msg.cell_id);
     },
-    [receiveServerOperation],
+    [clearUnconfirmedTextOperation, textSync],
   );
 
   const handleTextEdit = useCallback(

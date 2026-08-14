@@ -77,6 +77,7 @@ interface NotebookState {
     isOwn: boolean,
     authorId: UserId,
   ) => boolean;
+  clearUnconfirmedTextOperation: (cellId: CellId) => void;
 }
 
 export const useNotebookStore = create<NotebookState>()(
@@ -364,6 +365,11 @@ export const useNotebookStore = create<NotebookState>()(
 
       return wasOwnAck;
     },
+
+    clearUnconfirmedTextOperation: (cellId: CellId) =>
+      set((state) => {
+        state.unconfirmedTextOperation[cellId] = null;
+      }),
   })),
 );
 
