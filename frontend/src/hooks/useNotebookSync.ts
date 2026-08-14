@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 
@@ -27,6 +27,7 @@ import type {
   ExecutionStartedMessage,
   ExecutionFinishedMessage,
   CellIdleMessage,
+  ServerMessage,
 } from "../types/server-message";
 import type {
   DeleteOp,
@@ -81,6 +82,41 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     (state) => state.receiveServerTextOperation,
   );
 
+  // Buffer server messages that arrive before the initial full state sync, then replay them once it lands.
+  const syncCompletedRef = useRef(false);
+  const replayBufferRef = useRef<(() => void)[]>([]);
+
+  const bufferUntilSynced = useCallback(
+    <M extends ServerMessage>(handler: (msg: M) => void): MessageHandler =>
+      (msg) => {
+        if (syncCompletedRef.current) {
+          handler(msg as M);
+        } else {
+          replayBufferRef.current.push(() => handler(msg as M));
+        }
+      },
+    [],
+  );
+
+  const discardUntilSynced = useCallback(
+    <M extends ServerMessage>(handler: (msg: M) => void): MessageHandler =>
+      (msg) => {
+        if (syncCompletedRef.current) {
+          handler(msg as M);
+        }
+      },
+    [],
+  );
+
+  const runBufferReplay = useCallback(() => {
+    syncCompletedRef.current = true;
+    const buffered = replayBufferRef.current;
+    replayBufferRef.current = [];
+    for (const replay of buffered) {
+      replay();
+    }
+  }, []);
+
   // --- Server message handlers ---
 
   const handleFullState = useCallback(
@@ -106,8 +142,18 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
         setCellVersions(msg.cell_versions);
       }
       setUsers(msg.users);
+
+      runBufferReplay();
     },
-    [setSession, setCells, setUsers, setVersion, setCellVersions, userName],
+    [
+      setSession,
+      setCells,
+      setUsers,
+      setVersion,
+      setCellVersions,
+      userName,
+      runBufferReplay,
+    ],
   );
 
   const handleJoin = useCallback(
@@ -137,6 +183,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
 
   const handleCellInsert = useCallback(
     (msg: CellInsertMessage) => {
+      if (msg.context.version <= useNotebookStore.getState().version) return;
       const cell = isCodeCell(msg.cell)
         ? ({ ...msg.cell, execution_state: "idle" } as Cell)
         : msg.cell;
@@ -159,6 +206,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
 
   const handleCellDelete = useCallback(
     (msg: CellDeleteMessage) => {
+      if (msg.context.version <= useNotebookStore.getState().version) return;
       const operation: DeleteOp = {
         id: msg.context.request_id,
         version: msg.context.version,
@@ -175,6 +223,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
 
   const handleCellMove = useCallback(
     (msg: CellMoveMessage) => {
+      if (msg.context.version <= useNotebookStore.getState().version) return;
       const operation: MoveOp = {
         id: msg.context.request_id,
         version: msg.context.version,
@@ -220,6 +269,10 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
 
   const handleTextEdit = useCallback(
     (msg: TextEditMessage) => {
+      const cellVersions = useNotebookStore.getState().cellVersions;
+      const cellVersion = cellVersions[msg.cell_id];
+      if (cellVersion === undefined || msg.context.cell_version <= cellVersion)
+        return;
       const operation: TextEditOp = {
         id: msg.context.request_id,
         version: msg.context.cell_version,
@@ -301,30 +354,26 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     on("full_state", (msg) => handleFullState(msg as FullStateMessage));
     on("join", (msg) => handleJoin(msg as JoinMessage));
     on("leave", (msg) => handleLeave(msg as LeaveMessage));
-    on("cell_insert", (msg) => handleCellInsert(msg as CellInsertMessage));
-    on("cell_delete", (msg) => handleCellDelete(msg as CellDeleteMessage));
-    on("cell_move", (msg) => handleCellMove(msg as CellMoveMessage));
-    on("text_edit", (msg) => handleTextEdit(msg as TextEditMessage));
+    on("cell_insert", bufferUntilSynced(handleCellInsert));
+    on("cell_delete", bufferUntilSynced(handleCellDelete));
+    on("cell_move", bufferUntilSynced(handleCellMove));
+    on("text_edit", bufferUntilSynced(handleTextEdit));
     on("operation_failed", (msg) =>
       handleOperationFailed(msg as OperationFailedMessage),
     );
     on("text_operation_failed", (msg) =>
       handleTextOperationFailed(msg as TextOperationFailedMessage),
     );
-    on("change_focus", (msg) => handleChangeFocus(msg as ChangeFocusMessage));
-    on("execution_pending", (msg) =>
-      handleExecutionPending(msg as ExecutionPendingMessage),
-    );
-    on("execution_started", (msg) =>
-      handleExecutionStarted(msg as ExecutionStartedMessage),
-    );
-    on("cell_output", (msg) => handleCellOutput(msg as CellOutputMessage));
-    on("execution_finished", (msg) =>
-      handleExecutionFinished(msg as ExecutionFinishedMessage),
-    );
-    on("cell_idle", (msg) => handleCellIdle(msg as CellIdleMessage));
+    on("change_focus", discardUntilSynced(handleChangeFocus));
+    on("execution_pending", discardUntilSynced(handleExecutionPending));
+    on("execution_started", discardUntilSynced(handleExecutionStarted));
+    on("cell_output", discardUntilSynced(handleCellOutput));
+    on("execution_finished", discardUntilSynced(handleExecutionFinished));
+    on("cell_idle", discardUntilSynced(handleCellIdle));
   }, [
     on,
+    bufferUntilSynced,
+    discardUntilSynced,
     handleFullState,
     handleJoin,
     handleLeave,

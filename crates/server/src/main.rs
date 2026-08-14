@@ -6,7 +6,7 @@ mod websocket;
 use axum::Router;
 use axum::routing::get;
 use execution_queue::execution_queue::ExecutionQueue;
-use notebook::conflict_resolver::naive_resolver::NaiveStateHolder;
+use notebook::conflict_resolver::resolver::ConcurrentStateHolder;
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -14,7 +14,7 @@ use tower_http::cors::CorsLayer;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let notebook_state_holder = NaiveStateHolder::new();
+    let notebook_state_holder = ConcurrentStateHolder::new();
     let (execution_queue, mut execution_output_rx) = ExecutionQueue::new().await?;
 
     let app_state = state::AppState::new(notebook_state_holder, execution_queue);

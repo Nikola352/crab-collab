@@ -9,6 +9,12 @@ use uuid::Uuid;
 /// Identifier for the origin (author) of edits, needed for correctly rebasing cursor positions
 pub type OriginId = Uuid;
 
+pub struct NotebookState {
+    pub notebook: Notebook,
+    pub cell_versions: HashMap<CellId, u64>,
+    pub cell_metadata: HashMap<CellId, String>,
+}
+
 #[async_trait::async_trait]
 pub trait NotebookStateHolder: Send + Sync {
     async fn apply_cell_operation(
@@ -18,7 +24,7 @@ pub trait NotebookStateHolder: Send + Sync {
 
     async fn get_notebook(&self) -> Notebook;
 
-    async fn get_cell_metadata(&self) -> HashMap<CellId, String>;
+    async fn get_notebook_state(&self) -> NotebookState;
 
     async fn get_version(&self) -> u64;
 
@@ -39,8 +45,6 @@ pub trait NotebookStateHolder: Send + Sync {
     ) -> usize;
 
     async fn get_cell_version(&self, cell_id: CellId) -> u64;
-
-    async fn get_cell_versions(&self) -> HashMap<CellId, u64>;
 
     async fn append_cell_output(
         &self,

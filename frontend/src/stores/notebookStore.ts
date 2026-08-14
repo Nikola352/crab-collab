@@ -321,6 +321,8 @@ export const useNotebookStore = create<NotebookState>()(
       set((state) => {
         const cellId = operation.cell_id;
 
+        if (!state.cells[cellId]) return;
+
         if (
           isOwn &&
           operation.id === state.unconfirmedTextOperation[cellId]?.id

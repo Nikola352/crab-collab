@@ -42,7 +42,7 @@ pub async fn handle_insert_cell(
                 state
                     .broadcast(
                         ServerMessage::CellInsert {
-                            context: create_output_context(user_id, &context),
+                            context: create_output_context(user_id, result.version, &context),
                             index,
                             cell,
                         },
@@ -77,7 +77,7 @@ pub async fn handle_delete_cell(
                 state
                     .broadcast(
                         ServerMessage::CellDelete {
-                            context: create_output_context(user_id, &context),
+                            context: create_output_context(user_id, result.version, &context),
                             cell_id,
                         },
                         None,
@@ -110,7 +110,7 @@ pub async fn handle_move_cell(
                 state
                     .broadcast(
                         ServerMessage::CellMove {
-                            context: create_output_context(user_id, &context),
+                            context: create_output_context(user_id, result.version, &context),
                             cell_id,
                             to_index,
                         },
@@ -165,9 +165,11 @@ pub async fn handle_text_edit(
 
 fn create_output_context(
     user_id: UserId,
+    version: u64,
     context: &NotebookOperationContext,
 ) -> NotebookStateUpdateContext {
     NotebookStateUpdateContext {
+        version,
         user_id,
         request_id: context.request_id,
     }
@@ -195,6 +197,7 @@ async fn send_error_message(
         sender
             .send(ServerMessage::OperationFailed {
                 context: NotebookStateUpdateContext {
+                    version: state.notebook.get_version().await,
                     user_id,
                     request_id: context.request_id,
                 },

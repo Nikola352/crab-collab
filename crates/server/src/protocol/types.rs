@@ -21,6 +21,9 @@ pub struct NotebookOperationContext {
 /// Server context sent with some operation's broadcasts to allow clients to correctly update their state
 #[derive(Debug, Clone, Serialize)]
 pub struct NotebookStateUpdateContext {
+    /// Current version of the document after the update
+    pub version: u64,
+
     /// User who requested the operation
     pub user_id: UserId,
 

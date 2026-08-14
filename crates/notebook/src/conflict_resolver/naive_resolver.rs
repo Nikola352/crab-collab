@@ -1,4 +1,4 @@
-use crate::conflict_resolver::state::{NotebookStateHolder, OriginId};
+use crate::conflict_resolver::state::{NotebookState, NotebookStateHolder, OriginId};
 use crate::error::NotebookError;
 use crate::notebook::{Cell, CellId, CellKind, CellOutput, Notebook};
 use crate::operation::NotebookOperation;
@@ -52,14 +52,19 @@ impl NotebookStateHolder for NaiveStateHolder {
         )
     }
 
-    async fn get_cell_metadata(&self) -> HashMap<CellId, String> {
+    async fn get_notebook_state(&self) -> NotebookState {
         let state = self.inner.read().await;
-        state
+        let cell_metadata = state
             .cell_order
             .get_indexes_by_id()
             .iter()
             .map(|(id, idx)| (id.clone(), idx.to_string()))
-            .collect()
+            .collect();
+        NotebookState {
+            notebook: self.get_notebook().await,
+            cell_versions: state.cell_versions.clone(),
+            cell_metadata,
+        }
     }
 
     async fn get_version(&self) -> u64 {
@@ -102,11 +107,6 @@ impl NotebookStateHolder for NaiveStateHolder {
             Some(v) => *v,
             None => 0,
         }
-    }
-
-    async fn get_cell_versions(&self) -> HashMap<CellId, u64> {
-        let state = self.inner.read().await;
-        state.cell_versions.clone()
     }
 
     async fn append_cell_output(

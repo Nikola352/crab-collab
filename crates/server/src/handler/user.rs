@@ -25,12 +25,13 @@ pub async fn handle_join(
     }
 
     if let Some(sender) = tx {
+        let nb_state = state.notebook.get_notebook_state().await;
         sender
             .send(ServerMessage::FullState {
-                notebook: state.notebook.get_notebook().await.clone(),
-                cell_metadata: state.notebook.get_cell_metadata().await,
+                notebook: nb_state.notebook,
+                cell_metadata: nb_state.cell_metadata,
                 version: state.notebook.get_version().await,
-                cell_versions: state.notebook.get_cell_versions().await,
+                cell_versions: nb_state.cell_versions,
                 pending_executions: get_pending_executions(state).await,
                 users: state.users_snapshot().await,
                 user_id,
