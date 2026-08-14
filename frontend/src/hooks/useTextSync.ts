@@ -64,14 +64,13 @@ export function useTextSync(send: SendFn, reportFocus: ReportFocusFn) {
       const elapsed = now - (lastFlushAt.current.get(cellId) ?? 0);
       if (elapsed < SEND_THROTTLE_MS) {
         scheduleIn(retryTimers.current, cellId, SEND_THROTTLE_MS - elapsed);
-        return;
+      } else {
+        const sent = useNotebookStore.getState().flushText(cellId, send);
+        if (sent) {
+          lastFlushAt.current.set(cellId, now);
+        }
       }
-
-      const sent = useNotebookStore.getState().flushText(cellId, send);
-      if (sent) {
-        lastFlushAt.current.set(cellId, now);
-        flushCursorIfPending(cellId);
-      }
+      flushCursorIfPending(cellId);
     },
     [send, flushCursorIfPending, scheduleIn],
   );

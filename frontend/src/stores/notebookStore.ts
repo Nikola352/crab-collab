@@ -51,6 +51,7 @@ interface NotebookState {
 
   setVersion: (version: number) => void;
   getCellVersion: (cellId: string) => number;
+  hasPendingTextOp: (cellId: CellId) => boolean;
   setCellVersions: (versions: Record<string, number>) => void;
   setCellVersion: (cellId: string, version: number) => void;
   getCell: (id: string) => Cell | undefined;
@@ -98,6 +99,10 @@ export const useNotebookStore = create<NotebookState>()(
     setVersion: (version) => set({ version }),
 
     getCellVersion: (cellId) => get().cellVersions[cellId] ?? 0,
+
+    hasPendingTextOp: (cellId) =>
+      get().unconfirmedTextOperation[cellId] != null ||
+      get().pendingTextBuffer[cellId] != null,
 
     setCellVersions: (versions) => set({ cellVersions: versions }),
 

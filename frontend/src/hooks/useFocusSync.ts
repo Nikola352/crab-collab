@@ -7,9 +7,38 @@ import { useNotebookStore } from "../stores/notebookStore";
 
 type SendFn = (message: ClientMessage) => void;
 
+const DEBOUNCE_MS = 75;
+const PENDING_TEXT_OP_RETRY_MS = 25;
+
 export function useFocusSync(send: SendFn) {
   const lastSent = useRef<{ cellId: CellId; position: number } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const trySend = useCallback(
+    (cellId: CellId, cursorPosition: number) => {
+      if (useNotebookStore.getState().hasPendingTextOp(cellId)) {
+        timerRef.current = setTimeout(
+          () => trySend(cellId, cursorPosition),
+          PENDING_TEXT_OP_RETRY_MS,
+        );
+        return;
+      }
+
+      const baseCellVersion = useNotebookStore
+        .getState()
+        .getCellVersion(cellId);
+
+      lastSent.current = { cellId, position: cursorPosition };
+      send({
+        type: "change_focus",
+        cell_id: cellId,
+        cursor_position: cursorPosition,
+        base_cell_version: baseCellVersion,
+      });
+      timerRef.current = null;
+    },
+    [send],
+  );
 
   const sendFocusChange = useCallback(
     (cellId: CellId, cursorPosition: number) => {
@@ -30,22 +59,12 @@ export function useFocusSync(send: SendFn) {
         clearTimeout(timerRef.current);
       }
 
-      const baseCellVersion = useNotebookStore
-        .getState()
-        .getCellVersion(cellId);
-
-      timerRef.current = setTimeout(() => {
-        lastSent.current = { cellId, position: cursorPosition };
-        send({
-          type: "change_focus",
-          cell_id: cellId,
-          cursor_position: cursorPosition,
-          base_cell_version: baseCellVersion,
-        });
-        timerRef.current = null;
-      }, 75);
+      timerRef.current = setTimeout(
+        () => trySend(cellId, cursorPosition),
+        DEBOUNCE_MS,
+      );
     },
-    [send],
+    [trySend],
   );
 
   return { sendFocusChange };
