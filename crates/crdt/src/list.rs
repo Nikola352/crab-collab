@@ -9,6 +9,7 @@ pub trait ElementId: Clone + Eq + Hash {}
 impl<T: Clone + Eq + Hash> ElementId for T {}
 
 /// A fractional-index-ordered list
+#[derive(Debug, Clone)]
 pub struct FractionalList<Id: ElementId> {
     by_id: HashMap<Id, FractionalIndex>,
     by_index: BTreeMap<FractionalIndex, Id>,
