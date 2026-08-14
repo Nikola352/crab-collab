@@ -107,10 +107,10 @@ impl NotebookStateHolder for ConcurrentStateHolder {
         base_cell_version: u64,
         position: usize,
         origin_id: OriginId,
-    ) -> usize {
-        match self.cells.get_mut(&cell_id) {
-            Some(state) => state.rebase_position(base_cell_version, position, origin_id),
-            None => position,
+    ) -> Result<usize, NotebookError> {
+        match self.cells.get(&cell_id) {
+            Some(state) => Ok(state.rebase_position(base_cell_version, position, origin_id)),
+            None => Err(NotebookError::CellNotFound(cell_id)),
         }
     }
 

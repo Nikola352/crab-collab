@@ -59,23 +59,28 @@ pub async fn handle_change_focus(
     base_cell_version: u64,
     state: &AppState,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let cursor_position = state
+    let result = state
         .notebook
         .rebase_cursor_position(cell_id, base_cell_version, cursor_position, user_id)
         .await;
 
-    set_focus(user_id, cell_id, Some(cursor_position), state).await;
+    match result {
+        Ok(cursor_position) => {
+            set_focus(user_id, cell_id, Some(cursor_position), state).await;
 
-    state
-        .broadcast(
-            ServerMessage::ChangeFocus {
-                user_id,
-                cell_id,
-                cursor_position,
-            },
-            Some(user_id),
-        )
-        .await?;
+            state
+                .broadcast(
+                    ServerMessage::ChangeFocus {
+                        user_id,
+                        cell_id,
+                        cursor_position,
+                    },
+                    Some(user_id),
+                )
+                .await?;
+        }
+        Err(_) => { /* noop: nobody needs to reconcile */ }
+    }
     Ok(())
 }
 

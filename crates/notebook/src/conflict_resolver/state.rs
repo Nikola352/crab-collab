@@ -42,7 +42,7 @@ pub trait NotebookStateHolder: Send + Sync {
         base_cell_version: u64,
         position: usize,
         origin_id: OriginId,
-    ) -> usize;
+    ) -> Result<usize, NotebookError>;
 
     async fn get_cell_version(&self, cell_id: CellId) -> u64;
 

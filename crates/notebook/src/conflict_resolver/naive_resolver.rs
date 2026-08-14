@@ -96,7 +96,7 @@ impl NotebookStateHolder for NaiveStateHolder {
         base_cell_version: u64,
         position: usize,
         origin_id: OriginId,
-    ) -> usize {
+    ) -> Result<usize, NotebookError> {
         let state = self.inner.read().await;
         state.rebase_position(cell_id, base_cell_version, position, origin_id)
     }
@@ -267,17 +267,21 @@ impl State {
         base_cell_version: u64,
         position: usize,
         origin_id: OriginId,
-    ) -> usize {
-        let mut pos = position;
-
-        if let Some(operations) = self.text_operation_history.get(&cell_id) {
-            let op_results = &operations[base_cell_version as usize..operations.len()];
-            for op_result in op_results {
-                pos =
-                    transform_position(pos, &op_result.operation, op_result.origin_id == origin_id);
+    ) -> Result<usize, NotebookError> {
+        match self.text_operation_history.get(&cell_id) {
+            Some(operations) => {
+                let mut pos = position;
+                let op_results = &operations[base_cell_version as usize..operations.len()];
+                for op_result in op_results {
+                    pos = transform_position(
+                        pos,
+                        &op_result.operation,
+                        op_result.origin_id == origin_id,
+                    );
+                }
+                Ok(pos)
             }
+            None => Err(NotebookError::CellNotFound(cell_id)),
         }
-
-        pos
     }
 }
