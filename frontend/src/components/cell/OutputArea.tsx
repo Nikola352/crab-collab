@@ -10,13 +10,13 @@ export function OutputArea({ outputs }: OutputAreaProps) {
   }
 
   return (
-    <div className="bg-gray-900 border-t border-gray-800">
+    <div className="bg-zinc-950/50 border-t border-zinc-700">
       {outputs.map((output, index) => (
         <div key={index} className="flex">
-          <div className="w-24 shrink-0 py-3 px-3 text-right text-gray-500 font-mono text-sm select-none whitespace-nowrap">
-            {output.execution_number ? `Out [${output.execution_number}]:` : ""}
+          <div className="w-20 shrink-0 py-3 px-3 text-right text-zinc-500 font-mono text-xs select-none whitespace-nowrap">
+            {output.execution_number ? `Out [${output.execution_number}]` : ""}
           </div>
-          <pre className="flex-1 py-3 px-3 text-gray-300 font-mono text-sm overflow-x-auto whitespace-pre-wrap border-l border-gray-800">
+          <pre className="flex-1 py-3 px-3 text-zinc-300 font-mono text-sm overflow-x-auto whitespace-pre-wrap border-l border-zinc-700">
             {output.text}
           </pre>
         </div>

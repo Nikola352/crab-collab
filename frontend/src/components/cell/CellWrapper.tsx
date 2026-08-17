@@ -1,3 +1,4 @@
+import { FiChevronDown, FiChevronUp, FiTrash2 } from "react-icons/fi";
 import type { User } from "../../types/user";
 import type { CellId } from "../../types/cell";
 import { isCodeCell } from "../../types/cell";
@@ -40,7 +41,7 @@ export function CellWrapper({
 
   return (
     <div
-      className={`group/cell relative ${hasFocus ? "pl-1" : ""}`}
+      className={`group/cell relative rounded-xl transition-colors ${hasFocus ? "pl-1" : ""}`}
       style={
         hasFocus ? { borderLeftWidth: 3, borderLeftColor: borderColor } : {}
       }
@@ -58,33 +59,33 @@ export function CellWrapper({
         {onMoveUp && (
           <button
             onClick={onMoveUp}
-            className="w-7 h-7 rounded bg-gray-700 hover:bg-gray-600 text-gray-400 hover:text-white
-              flex items-center justify-center text-sm"
+            className="w-7 h-7 rounded-md bg-zinc-700/90 hover:bg-zinc-600 text-zinc-300 hover:text-zinc-100
+              flex items-center justify-center"
             aria-label="Move cell up"
             title="Move cell up"
           >
-            &#x2191;
+            <FiChevronUp size={15} />
           </button>
         )}
         {onMoveDown && (
           <button
             onClick={onMoveDown}
-            className="w-7 h-7 rounded bg-gray-700 hover:bg-gray-600 text-gray-400 hover:text-white
-              flex items-center justify-center text-sm"
+            className="w-7 h-7 rounded-md bg-zinc-700/90 hover:bg-zinc-600 text-zinc-300 hover:text-zinc-100
+              flex items-center justify-center"
             aria-label="Move cell down"
             title="Move cell down"
           >
-            &#x2193;
+            <FiChevronDown size={15} />
           </button>
         )}
         <button
           onClick={onDelete}
-          className="w-7 h-7 rounded bg-gray-700 hover:bg-red-600 text-gray-400 hover:text-white
-            flex items-center justify-center text-sm"
+          className="w-7 h-7 rounded-md bg-zinc-700/90 hover:bg-red-600 text-zinc-300 hover:text-white
+            flex items-center justify-center"
           aria-label="Delete cell"
           title="Delete cell"
         >
-          &times;
+          <FiTrash2 size={14} />
         </button>
       </div>
       {isCodeCell(cell) ? (

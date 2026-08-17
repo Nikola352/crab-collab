@@ -22,8 +22,8 @@ export function UserAvatar({
 
   return (
     <div
-      className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-medium text-white shrink-0 ${
-        isCurrentUser ? "ring-2 ring-white" : ""
+      className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-medium text-white shrink-0 ring-2 ${
+        isCurrentUser ? "ring-zinc-100" : "ring-zinc-800"
       }`}
       style={{ backgroundColor: bgColor }}
       title={user.name ?? "Unknown"}

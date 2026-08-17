@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import Editor from "@monaco-editor/react";
+import Editor, { type Monaco } from "@monaco-editor/react";
 import { KeyCode, KeyMod, editor } from "monaco-editor";
+import { FiLoader, FiPlay } from "react-icons/fi";
 import type { CellId, CodeCell as CodeCellType } from "../../types/cell";
 import type { User } from "../../types/user";
 import { getUserColorIndex } from "../../utils/userColors";
@@ -9,6 +10,24 @@ import {
   utf16ToCodepointOffset,
 } from "../../utils/textOffset";
 import { OutputArea } from "./OutputArea";
+
+function defineCrabTheme(monaco: Monaco) {
+  monaco.editor.defineTheme("crab-dark", {
+    base: "vs-dark",
+    inherit: true,
+    rules: [],
+    colors: {
+      "editor.background": "#27272a",
+      "editor.lineHighlightBackground": "#3f3f4680",
+      "editorLineNumber.foreground": "#a1a1aa",
+      "editorLineNumber.activeForeground": "#e4e4e7",
+      "editor.selectionBackground": "#3866f938",
+      "editorCursor.foreground": "#e4e4e7",
+      "editorIndentGuide.background": "#3f3f46",
+      "editorWhitespace.foreground": "#3f3f46",
+    },
+  });
+}
 
 function buildRemoteCursorDecorations(
   model: editor.ITextModel,
@@ -166,39 +185,45 @@ export const CodeCell = memo(function CodeCell({
     collection.set(buildRemoteCursorDecorations(model, focusedByUsers));
   }, [focusedByUsers]);
 
-  const executionLabel =
-    cell.execution_state === "running" || cell.execution_state === "pending"
-      ? "[*]"
-      : cell.execution_number !== null
-        ? `[${cell.execution_number}]`
-        : "[ ]";
+  const isRunning =
+    cell.execution_state === "running" || cell.execution_state === "pending";
+  const executionLabel = isRunning
+    ? ""
+    : cell.execution_number !== null
+      ? `[${cell.execution_number}]`
+      : "[ ]";
 
   const lineCount = cell.content.split("\n").length;
   const editorHeight = Math.max(lineCount * 20 + 16, 60);
 
   return (
-    <div className="bg-gray-950 rounded-lg overflow-hidden border border-gray-800">
+    <div className="bg-zinc-800 rounded-xl overflow-hidden border border-zinc-700 hover:border-zinc-600 transition-colors">
       <div className="flex">
-        <div className="w-24 shrink-0 py-3 px-3 text-right text-gray-500 font-mono text-sm select-none bg-gray-900/50 whitespace-nowrap flex flex-col items-end gap-1">
-          <span>In {executionLabel}:</span>
+        <div className="w-20 shrink-0 py-3 px-3 text-right text-zinc-400 font-mono text-xs select-none bg-zinc-950/50 whitespace-nowrap flex flex-col items-end gap-2">
+          <span>In {executionLabel}</span>
           <button
             onClick={() => onExecute(cell.id)}
             disabled={cell.execution_state !== "idle"}
-            className="w-6 h-6 rounded bg-gray-700 hover:bg-green-700 text-gray-400 hover:text-white flex items-center justify-center text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-6 h-6 rounded-md bg-zinc-700 hover:bg-brand-600 text-zinc-400 hover:text-white flex items-center justify-center disabled:opacity-60 disabled:cursor-not-allowed"
             aria-label="Run cell"
             title="Run cell (Shift+Enter)"
           >
-            &#9654;
+            {isRunning ? (
+              <FiLoader size={12} className="animate-spin" />
+            ) : (
+              <FiPlay size={11} />
+            )}
           </button>
         </div>
-        <div className="flex-1 min-w-0 border-l border-gray-800">
+        <div className="flex-1 min-w-0 border-l border-zinc-700">
           <Editor
             height={editorHeight}
             language="python"
             value={cell.content}
             onChange={(value) => setContent(value ?? "")}
+            beforeMount={defineCrabTheme}
             onMount={handleMount}
-            theme="vs-dark"
+            theme="crab-dark"
             options={{
               minimap: { enabled: false },
               lineNumbers: "on",

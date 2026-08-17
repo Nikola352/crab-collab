@@ -33,9 +33,9 @@ export function NotebookView({ userName }: NotebookViewProps) {
   }, [isConnected, send, userName]);
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <NotebookHeader />
-      <main className="max-w-4xl mx-auto px-6 py-6">
+    <div className="min-h-screen">
+      <NotebookHeader isConnected={isConnected} />
+      <main className="max-w-4xl mx-auto px-6 py-8">
         <CellList
           onInsertCell={handleInsertCell}
           onDeleteCell={handleDeleteCell}

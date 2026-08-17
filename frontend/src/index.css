@@ -1,7 +1,68 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-/* Remote cursor decorations for Monaco editor */
+@theme {
+  --color-brand-50: #fff4ed;
+  --color-brand-100: #ffe4d3;
+  --color-brand-200: #ffc7a6;
+  --color-brand-300: #ff9d68;
+  --color-brand-400: #fd7a3d;
+  --color-brand-500: #f2601f;
+  --color-brand-600: #d6480f;
+  --color-brand-700: #ad3710;
+  --color-brand-800: #8a2e14;
+  --color-brand-900: #712913;
+
+  --color-accent-400: #7c93ff;
+  --color-accent-500: #3866f9;
+  --color-accent-600: #2748d6;
+}
+
+@layer base {
+  body {
+    @apply bg-zinc-900 text-zinc-100 antialiased;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-brand-500) 35%, transparent);
+  }
+
+  /* Thin, theme-matched scrollbars */
+  * {
+    scrollbar-color: var(--color-zinc-600) transparent;
+    scrollbar-width: thin;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-zinc-600);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-zinc-500);
+  }
+}
+
+.brand-gradient-text {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-brand-400) 0%,
+    #e0518f 50%,
+    var(--color-accent-500) 100%
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/* Remote cursor decorations for Monaco editor. Indices must match COLORS in utils/userColors.ts */
 .remote-cursor-0 {
   border-left: 2px solid #ef4444 !important;
   margin-left: -1px;
@@ -11,26 +72,42 @@
   margin-left: -1px;
 }
 .remote-cursor-2 {
-  border-left: 2px solid #eab308 !important;
+  border-left: 2px solid #ca8a04 !important;
   margin-left: -1px;
 }
 .remote-cursor-3 {
-  border-left: 2px solid #22c55e !important;
+  border-left: 2px solid #65a30d !important;
   margin-left: -1px;
 }
 .remote-cursor-4 {
-  border-left: 2px solid #14b8a6 !important;
+  border-left: 2px solid #22c55e !important;
   margin-left: -1px;
 }
 .remote-cursor-5 {
-  border-left: 2px solid #3b82f6 !important;
+  border-left: 2px solid #14b8a6 !important;
   margin-left: -1px;
 }
 .remote-cursor-6 {
-  border-left: 2px solid #8b5cf6 !important;
+  border-left: 2px solid #0891b2 !important;
   margin-left: -1px;
 }
 .remote-cursor-7 {
+  border-left: 2px solid #3b82f6 !important;
+  margin-left: -1px;
+}
+.remote-cursor-8 {
+  border-left: 2px solid #6366f1 !important;
+  margin-left: -1px;
+}
+.remote-cursor-9 {
+  border-left: 2px solid #8b5cf6 !important;
+  margin-left: -1px;
+}
+.remote-cursor-10 {
+  border-left: 2px solid #c026d3 !important;
+  margin-left: -1px;
+}
+.remote-cursor-11 {
   border-left: 2px solid #ec4899 !important;
   margin-left: -1px;
 }

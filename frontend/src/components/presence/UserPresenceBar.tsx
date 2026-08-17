@@ -11,10 +11,8 @@ export function UserPresenceBar() {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-gray-400 text-sm">
-        {users.length} {users.length === 1 ? "user" : "users"}
-      </span>
+    <div className="flex items-center gap-3">
+      <span className="w-px h-5 bg-zinc-700" />
       <div className="flex -space-x-2">
         {users.map((user) => (
           <UserAvatar
@@ -25,6 +23,9 @@ export function UserPresenceBar() {
           />
         ))}
       </div>
+      <span className="text-zinc-500 text-xs">
+        {users.length} {users.length === 1 ? "user" : "users"}
+      </span>
     </div>
   );
 }
