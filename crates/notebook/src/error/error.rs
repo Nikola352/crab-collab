@@ -8,6 +8,11 @@ pub enum NotebookError {
     CellNotFound(CellId),
     InvalidIndex(usize),
     InvalidTextOperation(OTError),
+    CellVersionTooOld {
+        cell_id: CellId,
+        requested_version: u64,
+        oldest_available_version: u64,
+    },
 }
 
 impl Display for NotebookError {
@@ -16,6 +21,14 @@ impl Display for NotebookError {
             NotebookError::CellNotFound(id) => write!(f, "Cell {id} not found"),
             NotebookError::InvalidIndex(idx) => write!(f, "Invalid cell index: {idx}"),
             NotebookError::InvalidTextOperation(_err) => write!(f, "Invalid OT transform"),
+            NotebookError::CellVersionTooOld {
+                cell_id,
+                requested_version,
+                oldest_available_version,
+            } => write!(
+                f,
+                "Cell {cell_id} version {requested_version} too old, oldest available is {oldest_available_version}"
+            ),
         }
     }
 }

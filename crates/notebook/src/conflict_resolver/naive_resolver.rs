@@ -109,6 +109,15 @@ impl NotebookStateHolder for NaiveStateHolder {
         }
     }
 
+    async fn get_cell_content(&self, cell_id: CellId) -> Option<String> {
+        self.inner
+            .read()
+            .await
+            .cells
+            .get(&cell_id)
+            .map(|c| c.content.clone())
+    }
+
     async fn append_cell_output(
         &self,
         cell_id: CellId,

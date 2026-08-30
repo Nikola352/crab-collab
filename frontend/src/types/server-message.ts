@@ -83,6 +83,13 @@ export interface TextOperationFailedMessage {
   message: string;
 }
 
+export interface CellResyncMessage {
+  type: "cell_resync";
+  context: TextStateUpdateContext;
+  cell_id: CellId;
+  content: string;
+}
+
 export interface ChangeFocusMessage {
   type: "change_focus";
   user_id: UserId;
@@ -130,6 +137,7 @@ export type ServerMessage =
   | TextEditMessage
   | OperationFailedMessage
   | TextOperationFailedMessage
+  | CellResyncMessage
   | ChangeFocusMessage
   | ExecutionPendingMessage
   | CellOutputMessage
@@ -188,4 +196,10 @@ export function isTextOperationFailedMessage(
   message: ServerMessage,
 ): message is TextOperationFailedMessage {
   return message.type === "text_operation_failed";
+}
+
+export function isCellResyncMessage(
+  message: ServerMessage,
+): message is CellResyncMessage {
+  return message.type === "cell_resync";
 }

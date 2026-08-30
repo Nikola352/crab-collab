@@ -46,6 +46,8 @@ pub trait NotebookStateHolder: Send + Sync {
 
     async fn get_cell_version(&self, cell_id: CellId) -> u64;
 
+    async fn get_cell_content(&self, cell_id: CellId) -> Option<String>;
+
     async fn append_cell_output(
         &self,
         cell_id: CellId,

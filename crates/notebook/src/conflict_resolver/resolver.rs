@@ -9,15 +9,18 @@ use crdt::list::FractionalList;
 use dashmap::DashMap;
 use fractional_index::FractionalIndex;
 use ot::text::{TextOperation, apply, transform, transform_position};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+const CELL_OPERATION_HISTORY_CAP: usize = 1000;
 
 #[derive(Debug, Clone)]
 struct CellState {
     cell: Cell,
     version: u64,
-    operation_history: Vec<TextOperationResult>,
+    history_base_version: u64,
+    operation_history: VecDeque<TextOperationResult>,
 }
 
 #[derive(Debug, Clone)]
@@ -121,6 +124,10 @@ impl NotebookStateHolder for ConcurrentStateHolder {
         }
     }
 
+    async fn get_cell_content(&self, cell_id: CellId) -> Option<String> {
+        self.cells.get(&cell_id).map(|s| s.cell.content.clone())
+    }
+
     async fn append_cell_output(
         &self,
         cell_id: CellId,
@@ -176,7 +183,8 @@ impl ConcurrentStateHolder {
             CellState {
                 cell: cell.clone(),
                 version: 0,
-                operation_history: Vec::new(),
+                history_base_version: 0,
+                operation_history: VecDeque::new(),
             },
         );
 
@@ -231,10 +239,18 @@ impl CellState {
         operation: TextOperation,
         origin_id: OriginId,
     ) -> Result<TextOperationResult, NotebookError> {
+        if base_cell_version < self.history_base_version {
+            return Err(NotebookError::CellVersionTooOld {
+                cell_id: self.cell.id,
+                requested_version: base_cell_version,
+                oldest_available_version: self.history_base_version,
+            });
+        }
         self.version += 1;
 
+        let start = (base_cell_version - self.history_base_version) as usize;
         let mut real_op = operation;
-        for op_result in &self.operation_history[base_cell_version as usize..] {
+        for op_result in self.operation_history.iter().skip(start) {
             let transform_result = transform(&op_result.operation, &real_op)?;
             real_op = transform_result.b_prime();
         }
@@ -247,7 +263,11 @@ impl CellState {
             origin_id,
         };
 
-        self.operation_history.push(result.clone());
+        self.operation_history.push_back(result.clone());
+        if self.operation_history.len() > CELL_OPERATION_HISTORY_CAP {
+            self.operation_history.pop_front();
+            self.history_base_version += 1;
+        }
 
         Ok(result)
     }
@@ -258,8 +278,10 @@ impl CellState {
         position: usize,
         origin_id: OriginId,
     ) -> usize {
+        // best-effort if not enough history
+        let start = base_cell_version.saturating_sub(self.history_base_version) as usize;
         let mut pos = position;
-        for op_result in &self.operation_history[base_cell_version as usize..] {
+        for op_result in self.operation_history.iter().skip(start) {
             pos = transform_position(pos, &op_result.operation, op_result.origin_id == origin_id);
         }
         pos
@@ -303,5 +325,89 @@ impl CellState {
             }
             _ => Err(NotebookError::CellNotFound(self.cell.id)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn new_cell_state() -> CellState {
+        CellState {
+            cell: Cell::new_code_with_id(CellId::new_v4(), String::new()),
+            version: 0,
+            history_base_version: 0,
+            operation_history: VecDeque::new(),
+        }
+    }
+
+    #[test]
+    fn caps_operation_history_and_advances_history_base_version() {
+        let mut cell_state = new_cell_state();
+        let origin_id = OriginId::new_v4();
+        let total_ops = CELL_OPERATION_HISTORY_CAP + 50;
+
+        let mut base_version = 0u64;
+        for i in 0..total_ops {
+            let op = TextOperation::insert_at(i, i, "a");
+            let result = cell_state
+                .apply_text_operation(base_version, op, origin_id)
+                .expect("op within current version should apply");
+            base_version = result.version;
+        }
+
+        assert_eq!(cell_state.version, total_ops as u64);
+        assert_eq!(
+            cell_state.operation_history.len(),
+            CELL_OPERATION_HISTORY_CAP
+        );
+        assert_eq!(
+            cell_state.history_base_version,
+            total_ops as u64 - CELL_OPERATION_HISTORY_CAP as u64
+        );
+    }
+
+    #[test]
+    fn rejects_and_resyncs_when_base_version_older_than_retained_history() {
+        let mut cell_state = new_cell_state();
+        let origin_id = OriginId::new_v4();
+        let total_ops = CELL_OPERATION_HISTORY_CAP + 50;
+
+        let mut base_version = 0u64;
+        for i in 0..total_ops {
+            let op = TextOperation::insert_at(i, i, "a");
+            let result = cell_state
+                .apply_text_operation(base_version, op, origin_id)
+                .expect("op within current version should apply");
+            base_version = result.version;
+        }
+
+        let version_before = cell_state.version;
+        let stale_op = TextOperation::insert_at(total_ops, 0, "x");
+        let err = cell_state
+            .apply_text_operation(0, stale_op, origin_id)
+            .expect_err("stale base_cell_version should be rejected");
+
+        assert!(matches!(err, NotebookError::CellVersionTooOld { .. }));
+        assert_eq!(cell_state.version, version_before);
+    }
+
+    #[test]
+    fn rebase_position_clamps_instead_of_panicking_on_stale_base_version() {
+        let mut cell_state = new_cell_state();
+        let origin_id = OriginId::new_v4();
+        let total_ops = CELL_OPERATION_HISTORY_CAP + 50;
+
+        let mut base_version = 0u64;
+        for i in 0..total_ops {
+            let op = TextOperation::insert_at(i, i, "a");
+            let result = cell_state
+                .apply_text_operation(base_version, op, origin_id)
+                .expect("op within current version should apply");
+            base_version = result.version;
+        }
+
+        // Should not panic even though version 0 predates history_base_version.
+        let _ = cell_state.rebase_position(0, 0, origin_id);
     }
 }

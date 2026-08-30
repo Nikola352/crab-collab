@@ -49,6 +49,7 @@ interface NotebookState extends NotebookData {
     authorId: UserId,
   ) => boolean;
   clearUnconfirmedTextOperation: (cellId: CellId) => void;
+  resyncCellContent: (cellId: CellId, content: string, version: number) => void;
 }
 
 export const useNotebookStore = create<NotebookState>()(
@@ -210,6 +211,11 @@ export const useNotebookStore = create<NotebookState>()(
     clearUnconfirmedTextOperation: (cellId) =>
       set((state) => {
         state.unconfirmedTextOperation[cellId] = null;
+      }),
+
+    resyncCellContent: (cellId, content, version) =>
+      set((state) => {
+        engine.resyncCellContent(state, cellId, content, version);
       }),
   })),
 );

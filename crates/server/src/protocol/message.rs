@@ -107,6 +107,12 @@ pub enum ServerMessage {
         message: String,
     },
 
+    CellResync {
+        context: TextStateUpdateContext,
+        cell_id: CellId,
+        content: String,
+    },
+
     ChangeFocus {
         user_id: UserId,
         cell_id: CellId,

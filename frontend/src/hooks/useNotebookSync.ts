@@ -21,6 +21,7 @@ import type {
   TextEditMessage,
   OperationFailedMessage,
   TextOperationFailedMessage,
+  CellResyncMessage,
   ChangeFocusMessage,
   ExecutionPendingMessage,
   CellOutputMessage,
@@ -83,6 +84,9 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
   );
   const clearUnconfirmedTextOperation = useNotebookStore(
     (state) => state.clearUnconfirmedTextOperation,
+  );
+  const resyncCellContent = useNotebookStore(
+    (state) => state.resyncCellContent,
   );
 
   // Buffer server messages that arrive before the initial full state sync, then replay them once it lands.
@@ -264,6 +268,15 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     [clearUnconfirmedTextOperation, textSync],
   );
 
+  const handleCellResync = useCallback(
+    (msg: CellResyncMessage) => {
+      console.log("Cell resync: ", msg);
+      resyncCellContent(msg.cell_id, msg.content, msg.context.cell_version);
+      textSync.handleAckFlush(msg.cell_id);
+    },
+    [resyncCellContent, textSync],
+  );
+
   const handleTextEdit = useCallback(
     (msg: TextEditMessage) => {
       const cellVersions = useNotebookStore.getState().cellVersions;
@@ -361,6 +374,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     on("text_operation_failed", (msg) =>
       handleTextOperationFailed(msg as TextOperationFailedMessage),
     );
+    on("cell_resync", (msg) => handleCellResync(msg as CellResyncMessage));
     on("change_focus", discardUntilSynced(handleChangeFocus));
     on("execution_pending", discardUntilSynced(handleExecutionPending));
     on("execution_started", discardUntilSynced(handleExecutionStarted));
@@ -380,6 +394,7 @@ export function useNotebookSync(send: SendFn, on: OnFn, userName: string) {
     handleTextEdit,
     handleOperationFailed,
     handleTextOperationFailed,
+    handleCellResync,
     handleChangeFocus,
     handleExecutionPending,
     handleExecutionStarted,

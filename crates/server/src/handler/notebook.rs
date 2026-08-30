@@ -216,17 +216,34 @@ async fn send_text_error_message(
     err: NotebookError,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(sender) = state.user_sender(user_id).await {
-        sender
-            .send(ServerMessage::TextOperationFailed {
+        let message = match err {
+            NotebookError::CellVersionTooOld { .. } => {
+                let content = state
+                    .notebook
+                    .get_cell_content(cell_id)
+                    .await
+                    .unwrap_or_default();
+                ServerMessage::CellResync {
+                    context: TextStateUpdateContext {
+                        cell_version: state.notebook.get_cell_version(cell_id).await,
+                        user_id,
+                        request_id: context.request_id,
+                    },
+                    cell_id,
+                    content,
+                }
+            }
+            other => ServerMessage::TextOperationFailed {
                 context: TextStateUpdateContext {
                     cell_version: state.notebook.get_cell_version(cell_id).await,
                     user_id,
                     request_id: context.request_id,
                 },
                 cell_id,
-                message: err.to_string(),
-            })
-            .await?;
+                message: other.to_string(),
+            },
+        };
+        sender.send(message).await?;
     }
     Ok(())
 }

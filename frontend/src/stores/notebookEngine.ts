@@ -204,6 +204,19 @@ export function rebaseCursorPosition(
   return pos;
 }
 
+export function resyncCellContent(
+  state: NotebookData,
+  cellId: CellId,
+  content: string,
+  version: number,
+) {
+  if (!state.cells[cellId]) return;
+  state.cells[cellId].content = content;
+  state.cellVersions[cellId] = version;
+  state.pendingTextBuffer[cellId] = null;
+  state.unconfirmedTextOperation[cellId] = null;
+}
+
 export function receiveServerOperation(
   state: NotebookData,
   operation: Operation,
