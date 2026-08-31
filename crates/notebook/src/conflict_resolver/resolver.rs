@@ -246,7 +246,6 @@ impl CellState {
                 oldest_available_version: self.history_base_version,
             });
         }
-        self.version += 1;
 
         let start = (base_cell_version - self.history_base_version) as usize;
         let mut real_op = operation;
@@ -255,6 +254,8 @@ impl CellState {
             real_op = transform_result.b_prime();
         }
         self.cell.content = apply(&real_op, &self.cell.content)?;
+
+        self.version += 1;
 
         let result = TextOperationResult {
             version: self.version,
