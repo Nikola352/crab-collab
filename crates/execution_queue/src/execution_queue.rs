@@ -172,8 +172,8 @@ async fn output_receiver(
                 }
                 if let KernelState::Idle = state {
                     let execution = take_execution_by_parent(&pending_executions, &parent_id).await;
-                    if let Some(execution) = execution {
-                        update_status(&pending_executions, &execution, Finished).await;
+                    if let Some(mut execution) = execution {
+                        execution.status = Finished;
                         let _ = tx
                             .send(ExecutionResult {
                                 execution,
