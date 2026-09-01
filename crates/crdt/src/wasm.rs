@@ -131,6 +131,15 @@ impl FractionalList {
         let index = parse_index(index)?;
         Ok(self.inner.move_to(id, &index).to_string())
     }
+
+    /// Moves an element to the specified index, preserving that exact index.
+    ///
+    /// If another element occupies the index, it is moved to a new index first.
+    #[wasm_bindgen(js_name = moveToStrict)]
+    pub fn move_to_strict(&mut self, id: String, index: &str) -> Result<String, JsValue> {
+        let index = parse_index(index)?;
+        Ok(self.inner.move_to_strict(id, &index).to_string())
+    }
 }
 
 impl Default for FractionalList {

@@ -233,7 +233,7 @@ export function receiveServerOperation(
       : null) ?? [undefined, undefined];
 
     if (new_index && pending_index && new_index != pending_index) {
-      state.cellOrder.moveTo(pending_id!, new_index);
+      state.cellOrder.moveToStrict(pending_id!, new_index);
     }
 
     state.pendingOperations.splice(0, 1);

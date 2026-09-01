@@ -105,6 +105,19 @@ impl<Id: ElementId> FractionalList<Id> {
         new_index
     }
 
+    /// Moves an element to the specified index, preserving that exact index.
+    ///
+    /// If another element occupies the index, it is moved to a new index first.
+    pub fn move_to_strict(&mut self, id: Id, index: &FractionalIndex) -> FractionalIndex {
+        if let Some(conflict_id) = self.by_index.get(index) {
+            if *conflict_id == id {
+                return index.clone();
+            }
+            self.move_to(conflict_id.clone(), &self.get_real_index(index));
+        }
+        self.move_to(id, index)
+    }
+
     fn get_real_index(&self, index: &FractionalIndex) -> FractionalIndex {
         if !self.by_index.contains_key(index) {
             return index.clone();
@@ -226,5 +239,46 @@ mod tests {
         assert_eq!(assigned, requested);
         assert_eq!(ordered_ids(&list), vec!["existing"]);
         assert_eq!(list.get_element_at(&requested), None);
+    }
+
+    #[test]
+    fn collaboration_protocol() {
+        let mut server: FractionalList<&str> = FractionalList::new();
+        let mut client_a: FractionalList<&str> = FractionalList::new();
+        let mut client_b: FractionalList<&str> = FractionalList::new();
+
+        // concurrent
+        client_a.insert_at("1", &FractionalIndex::default());
+        let idx2 = client_b.insert_at("2", &FractionalIndex::default());
+
+        // reaches server
+        let res1 = server.insert_at("1", &FractionalIndex::default());
+        let res2 = server.insert_at("2", &FractionalIndex::default());
+
+        // before answer
+        let idx3 = FractionalIndex::new_after(&FractionalIndex::default());
+        client_b.insert_at("3", &idx3);
+
+        // send to server
+        let res3 = server.insert_at("3", &idx3);
+
+        // client b receive from server
+        assert_eq!(res1, idx2);
+        client_b.delete("2");
+        client_b.insert_at("1", &res1);
+        let idx2 = client_b.insert_at("2", &idx2);
+
+        // client b receive from server
+        if res2 != idx2 {
+            client_b.move_to_strict("2", &res2);
+        }
+
+        // client b receive from server
+        if idx3 != res3 {
+            client_b.move_to_strict("3", &res3);
+        }
+
+        assert_eq!(ordered_ids(&server), ordered_ids(&client_b));
+        assert_eq!(server.get_indexes_by_id(), client_b.get_indexes_by_id());
     }
 }
