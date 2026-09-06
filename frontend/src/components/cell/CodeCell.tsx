@@ -1,62 +1,10 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import Editor, { type Monaco } from "@monaco-editor/react";
+import { memo, useCallback } from "react";
 import { KeyCode, KeyMod, editor } from "monaco-editor";
 import { FiLoader, FiPlay } from "react-icons/fi";
 import type { CellId, CodeCell as CodeCellType } from "../../types/cell";
 import type { User } from "../../types/user";
-import { getUserColorIndex } from "../../utils/userColors";
-import {
-  codepointToUtf16Offset,
-  utf16ToCodepointOffset,
-} from "../../utils/textOffset";
+import { CellEditor } from "./CellEditor";
 import { OutputArea } from "./OutputArea";
-
-function defineCrabTheme(monaco: Monaco) {
-  monaco.editor.defineTheme("crab-dark", {
-    base: "vs-dark",
-    inherit: true,
-    rules: [],
-    colors: {
-      "editor.background": "#27272a",
-      "editor.lineHighlightBackground": "#3f3f4680",
-      "editorLineNumber.foreground": "#a1a1aa",
-      "editorLineNumber.activeForeground": "#e4e4e7",
-      "editor.selectionBackground": "#3866f938",
-      "editorCursor.foreground": "#e4e4e7",
-      "editorIndentGuide.background": "#3f3f46",
-      "editorWhitespace.foreground": "#3f3f46",
-    },
-  });
-}
-
-function buildRemoteCursorDecorations(
-  model: editor.ITextModel,
-  users: User[],
-): editor.IModelDeltaDecoration[] {
-  return users
-    .filter((u) => u.cursor_position != null)
-    .map((user) => {
-      const utf16Offset = codepointToUtf16Offset(
-        model.getValue(),
-        user.cursor_position!,
-      );
-      const position = model.getPositionAt(utf16Offset);
-      const colorIndex = getUserColorIndex(user.id);
-      return {
-        range: {
-          startLineNumber: position.lineNumber,
-          startColumn: position.column,
-          endLineNumber: position.lineNumber,
-          endColumn: position.column,
-        },
-        options: {
-          className: `remote-cursor-${colorIndex}`,
-          hoverMessage: { value: user.name ?? "Anonymous" },
-          stickiness: 1, // NeverGrowsWhenTypingAtEdges
-        },
-      };
-    });
-}
 
 interface CodeCellProps {
   cell: CodeCellType;
@@ -77,84 +25,8 @@ export const CodeCell = memo(function CodeCell({
   focusedByUsers,
   myCursorPosition,
 }: CodeCellProps) {
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-  const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(
-    null,
-  );
-
-  const lastSeenContentRef = useRef(cell.content);
-  const isExternalContentUpdateRef = useRef(false);
-  const pendingCursorRestoreRef = useRef(false);
-  useLayoutEffect(() => {
-    if (cell.content !== lastSeenContentRef.current) {
-      isExternalContentUpdateRef.current = true;
-      const monacoValue = editorRef.current?.getModel()?.getValue();
-      pendingCursorRestoreRef.current =
-        monacoValue !== undefined && monacoValue !== cell.content;
-    }
-  });
-  useEffect(() => {
-    lastSeenContentRef.current = cell.content;
-    isExternalContentUpdateRef.current = false;
-
-    if (pendingCursorRestoreRef.current) {
-      pendingCursorRestoreRef.current = false;
-      const ed = editorRef.current;
-      const model = ed?.getModel();
-      if (ed && model && myCursorPosition != null) {
-        const utf16Offset = codepointToUtf16Offset(
-          cell.content,
-          myCursorPosition,
-        );
-        ed.setPosition(model.getPositionAt(utf16Offset));
-      }
-    }
-  }, [cell.content, myCursorPosition]);
-
-  const setContent = useCallback(
-    (content: string) => onContentChange(cell.id, content),
-    [onContentChange, cell.id],
-  );
-
   const handleMount = useCallback(
     (ed: editor.IStandaloneCodeEditor) => {
-      editorRef.current = ed;
-      const model = ed.getModel();
-      decorationsRef.current = ed.createDecorationsCollection(
-        model ? buildRemoteCursorDecorations(model, focusedByUsers) : [],
-      );
-
-      ed.onDidChangeCursorPosition((e) => {
-        if (isExternalContentUpdateRef.current) return;
-        const cursorModel = ed.getModel();
-        const offset = cursorModel?.getOffsetAt(e.position);
-        if (!cursorModel || offset === undefined) return;
-        const codepointOffset = utf16ToCodepointOffset(
-          cursorModel.getValue(),
-          offset,
-        );
-
-        // Explicit = pure navigation (arrow keys, clicks, Home/End)
-        // Anything else (typing, paste, undo/redo) moved the cursor as a side effect of an edit
-        if (e.reason === editor.CursorChangeReason.Explicit) {
-          onFocusChange(cell.id, codepointOffset);
-        } else {
-          onContentDrivenFocusChange(cell.id, codepointOffset);
-        }
-      });
-
-      ed.onDidFocusEditorText(() => {
-        const model = ed.getModel();
-        const pos = ed.getPosition();
-        if (model && pos) {
-          const codepointOffset = utf16ToCodepointOffset(
-            model.getValue(),
-            model.getOffsetAt(pos),
-          );
-          onFocusChange(cell.id, codepointOffset);
-        }
-      });
-
       ed.addAction({
         id: "execute-cell",
         label: "Execute Cell",
@@ -164,26 +36,8 @@ export const CodeCell = memo(function CodeCell({
         },
       });
     },
-    [
-      cell.id,
-      onFocusChange,
-      onContentDrivenFocusChange,
-      onExecute,
-      focusedByUsers,
-    ],
+    [cell.id, onExecute],
   );
-
-  // Update remote cursor decorations when focusedByUsers changes
-  useEffect(() => {
-    const ed = editorRef.current;
-    const collection = decorationsRef.current;
-    if (!ed || !collection) return;
-
-    const model = ed.getModel();
-    if (!model) return;
-
-    collection.set(buildRemoteCursorDecorations(model, focusedByUsers));
-  }, [focusedByUsers]);
 
   const isRunning =
     cell.execution_state === "running" || cell.execution_state === "pending";
@@ -192,9 +46,6 @@ export const CodeCell = memo(function CodeCell({
     : cell.execution_number !== null
       ? `[${cell.execution_number}]`
       : "[ ]";
-
-  const lineCount = cell.content.split("\n").length;
-  const editorHeight = Math.max(lineCount * 20 + 16, 60);
 
   return (
     <div className="bg-zinc-800 rounded-xl overflow-hidden border border-zinc-700 hover:border-zinc-600 transition-colors">
@@ -216,41 +67,16 @@ export const CodeCell = memo(function CodeCell({
           </button>
         </div>
         <div className="flex-1 min-w-0 border-l border-zinc-700">
-          <Editor
-            height={editorHeight}
+          <CellEditor
+            cellId={cell.id}
+            content={cell.content}
             language="python"
-            value={cell.content}
-            onChange={(value) => setContent(value ?? "")}
-            beforeMount={defineCrabTheme}
+            focusedByUsers={focusedByUsers}
+            myCursorPosition={myCursorPosition}
+            onContentChange={onContentChange}
+            onFocusChange={onFocusChange}
+            onContentDrivenFocusChange={onContentDrivenFocusChange}
             onMount={handleMount}
-            theme="crab-dark"
-            options={{
-              minimap: { enabled: false },
-              lineNumbers: "on",
-              scrollBeyondLastLine: false,
-              folding: false,
-              lineDecorationsWidth: 8,
-              lineNumbersMinChars: 3,
-              renderLineHighlight: "line",
-              renderLineHighlightOnlyWhenFocus: true,
-              overviewRulerLanes: 0,
-              hideCursorInOverviewRuler: true,
-              overviewRulerBorder: false,
-              scrollbar: {
-                vertical: "hidden",
-                horizontal: "auto",
-                alwaysConsumeMouseWheel: false,
-              },
-              padding: { top: 12, bottom: 12 },
-              fontSize: 14,
-              fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
-              tabSize: 4,
-              wordWrap: "on",
-              automaticLayout: true,
-              cursorBlinking: "smooth",
-              cursorSmoothCaretAnimation: "on",
-              smoothScrolling: true,
-            }}
           />
         </div>
       </div>

@@ -103,6 +103,9 @@ export function CellWrapper({
           cell={cell}
           onContentChange={onContentChange}
           onFocusChange={onFocusChange}
+          onContentDrivenFocusChange={onContentDrivenFocusChange}
+          focusedByUsers={focusedByUsers}
+          myCursorPosition={myCursorPosition}
         />
       )}
     </div>
