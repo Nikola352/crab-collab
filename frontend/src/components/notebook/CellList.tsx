@@ -142,12 +142,18 @@ export function CellList({
         <p className="text-zinc-400 text-sm mb-4">
           No cells in this notebook yet.
         </p>
-        <div className="flex justify-center">
+        <div className="flex justify-center gap-2">
           <button
             onClick={() => insertAt(0, "code")}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm font-medium"
           >
-            <FiPlus size={14} /> Add a cell
+            <FiCode size={14} /> Code
+          </button>
+          <button
+            onClick={() => insertAt(0, "markdown")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm font-medium"
+          >
+            <FiType size={14} /> Markdown
           </button>
         </div>
       </div>
